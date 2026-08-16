@@ -1,0 +1,10 @@
+---
+description: Frontend SDK must not hold merchant API keys; requires a backend SDK
+alwaysApply: true
+---
+
+# Frontend SDK
+
+- Talk only to the merchant backend or short-lived client tokens.
+- Do not add PHP/Python/Node HTTP clients here.
+- Keep `packages/core` free of React/Angular/Vue runtime dependencies.

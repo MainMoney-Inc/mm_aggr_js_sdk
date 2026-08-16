@@ -1,0 +1,10 @@
+---
+description: Never mix monetary amounts across currencies
+alwaysApply: true
+---
+
+# Currency safety
+
+- Never add, subtract, compare, or aggregate amounts across currencies.
+- Group values by currency code. Cross-currency math requires an explicit FX
+  context (rate source and applied rate).

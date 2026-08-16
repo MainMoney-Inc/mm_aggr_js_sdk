@@ -1,0 +1,11 @@
+---
+description: Merchant OpenAPI is the source of truth; do not invent endpoints
+alwaysApply: true
+---
+
+# API source of truth
+
+- Implement only operations documented at `/api/v1/schema/merchants/` and
+  `/api/v1/docs/merchants/` on the MM Aggregator.
+- Do not invent paths, headers, or error codes.
+- Never put merchant API keys in frontend or plugin JavaScript.

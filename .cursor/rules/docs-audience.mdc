@@ -1,0 +1,13 @@
+---
+description: README is for installers; CONTRIBUTING is for people who change this repo
+alwaysApply: true
+---
+
+# Documentation audience
+
+- `README.md` is for application developers installing this package. Install,
+  requirements, quick start, credentials. No git branches, PR process, or
+  coding standards except a single link to `CONTRIBUTING.md`.
+- `CONTRIBUTING.md` is for contributors. Clone, toolchain, tests, CLA, commits.
+  Do not duplicate merchant install steps from README.
+- Never mix these audiences.
