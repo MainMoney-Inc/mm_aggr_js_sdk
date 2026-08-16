@@ -31,5 +31,7 @@ npm run build
 ## Pull requests
 
 - Include tests for behavior changes.
-- Do not invent merchant API endpoints; use `/api/v1/schema/merchants/`.
+- Do not invent merchant API endpoints. This package is the **frontend** SDK:
+  it must not send merchant API keys. Backend SDKs implement the pinned
+  contract in the contrib hub `contract/`.
 - Do not commit secrets.

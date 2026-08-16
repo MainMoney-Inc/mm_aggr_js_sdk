@@ -5,7 +5,8 @@ alwaysApply: true
 
 # API source of truth
 
-- Implement only operations documented at `/api/v1/schema/merchants/` and
-  `/api/v1/docs/merchants/` on the MM Aggregator.
-- Do not invent paths, headers, or error codes.
+- This package is the frontend SDK. It must not call `/api/v1/schema/merchants/`
+  with merchant API keys. Backend SDKs implement the hub pin
+  `contract/openapi/merchants.openapi.yaml`.
+- Do not invent aggregator paths, headers, or error codes.
 - Never put merchant API keys in frontend or plugin JavaScript.
