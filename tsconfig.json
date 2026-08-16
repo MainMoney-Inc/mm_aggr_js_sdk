@@ -4,12 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
-    "declaration": true,
     "skipLibCheck": true
   },
-  "references": [
-    { "path": "packages/core" },
-    { "path": "packages/http" },
-    { "path": "packages/checkout" }
-  ]
+  "include": ["packages/core/src", "packages/http/src", "packages/checkout/src"]
 }

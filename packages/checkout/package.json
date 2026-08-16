@@ -1,18 +1,39 @@
 {
   "name": "@mainmoney/js-checkout",
   "version": "0.1.0",
+  "description": "Checkout wizard for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
+  "author": "MainMoney SARL",
+  "homepage": "https://github.com/MainMoney-Inc/mm_aggr_js_sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MainMoney-Inc/mm_aggr_js_sdk.git",
+    "directory": "packages/checkout"
+  },
+  "bugs": {
+    "url": "https://github.com/MainMoney-Inc/mm_aggr_js_sdk/issues"
+  },
+  "keywords": ["mainmoney", "checkout", "payments"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "files": ["dist", "LICENSE", "README.md"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean"
+    "build": "tsup src/index.ts --format esm --dts --clean && cp src/styles.css dist/styles.css && mkdir -p dist/assets && cp src/assets/main_money_square.png dist/assets/",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mainmoney/js-core": "0.1.0",
+    "@mainmoney/js-http": "0.1.0"
   }
 }

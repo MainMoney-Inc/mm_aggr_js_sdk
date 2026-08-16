@@ -1,7 +1,3 @@
-export interface CreateHttpOptions {
-  merchantBackendUrl: string;
-}
-
-export function createHttp(options: { merchantBackendUrl: string }): { merchantBackendUrl: string } {
-  return { merchantBackendUrl: options.merchantBackendUrl };
-}
+export { FetchHttpClient } from "./fetch-client.js";
+export type { HttpClient, QueryValue, RequestOptions } from "./http-client.js";
+export { createHttp, decodeJson, type CreateHttpOptions, type MerchantHttp } from "./merchant-client.js";

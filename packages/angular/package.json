@@ -1,0 +1,35 @@
+{
+  "name": "@mainmoney/js-angular",
+  "version": "0.1.0",
+  "description": "Angular checkout wizard for the MainMoney JS/TS frontend SDK",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "MainMoney SARL",
+  "homepage": "https://github.com/MainMoney-Inc/mm_aggr_js_sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MainMoney-Inc/mm_aggr_js_sdk.git",
+    "directory": "packages/angular"
+  },
+  "main": "./dist/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src/index.d.ts", "LICENSE", "README.md"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean --external @angular/core --external @mainmoney/js-checkout"
+  },
+  "peerDependencies": {
+    "@angular/core": ">=17"
+  },
+  "dependencies": {
+    "@mainmoney/js-checkout": "0.1.0"
+  }
+}

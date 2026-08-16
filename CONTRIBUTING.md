@@ -23,6 +23,14 @@ npm test
 npm run build
 ```
 
+## npm
+
+Packages: `@mainmoney/js-core`, `@mainmoney/js-http`, `@mainmoney/js-checkout`,
+`@mainmoney/js-react`, `@mainmoney/js-vue`, `@mainmoney/js-angular`. First
+publish is a one-time project create on npm. After that, release from each
+package directory with `npm publish --access public`. Release by pushing an
+annotated tag (`v0.1.0`, then semver). Do not commit npm tokens.
+
 ## Branches and commits
 
 - `feature/<name>`, `bugfix/<name>`, `hotfix/<issue>`, `refactor/<description>`

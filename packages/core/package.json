@@ -1,8 +1,20 @@
 {
   "name": "@mainmoney/js-core",
   "version": "0.1.0",
+  "description": "Framework-agnostic core for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
+  "author": "MainMoney SARL",
+  "homepage": "https://github.com/MainMoney-Inc/mm_aggr_js_sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MainMoney-Inc/mm_aggr_js_sdk.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/MainMoney-Inc/mm_aggr_js_sdk/issues"
+  },
+  "keywords": ["mainmoney", "checkout", "payments"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -12,7 +24,11 @@
     }
   },
   "files": ["dist", "LICENSE", "README.md"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean"
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }
