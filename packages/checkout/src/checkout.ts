@@ -37,6 +37,8 @@ export type CreateCheckoutOptions = {
   messages?: Partial<MessageCatalog>;
   theme?: Partial<CheckoutTheme>;
   reference?: string;
+  amount?: string;
+  lockAmount?: boolean;
   pollIntervalMs?: number;
   onPartnerFee?: (ctx: CheckoutSnapshot) => Promise<PartnerFee | null>;
   onValidateBalance?: (ctx: CheckoutSnapshot) => Promise<BalanceCheck>;
@@ -54,6 +56,7 @@ export type CheckoutSnapshot = {
   identifier: string;
   customerName: string | null;
   amount: string;
+  lockAmount: boolean;
   currency: string;
   limits?: AmountLimit;
   fees?: FeeSimulation;
@@ -103,7 +106,8 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     providers: [],
     identifier: "",
     customerName: null,
-    amount: "",
+    amount: options.amount ?? "",
+    lockAmount: options.lockAmount === true,
     currency: "",
     partnerFee: null,
     theme,
@@ -198,6 +202,9 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   };
 
   const setAmount = async (amount: string): Promise<void> => {
+    if (state.lockAmount) {
+      return;
+    }
     state.amount = amount;
     await refreshLimitsAndFees();
     notify();

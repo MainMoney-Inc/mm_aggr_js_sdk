@@ -190,9 +190,14 @@ function amountField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   input.className = "mm-input";
   input.value = state.amount;
   input.inputMode = "decimal";
-  input.addEventListener("change", () => {
-    void checkout.setAmount(input.value);
-  });
+  if (state.lockAmount) {
+    input.disabled = true;
+    input.readOnly = true;
+  } else {
+    input.addEventListener("change", () => {
+      void checkout.setAmount(input.value);
+    });
+  }
   field.append(input);
   return field;
 }

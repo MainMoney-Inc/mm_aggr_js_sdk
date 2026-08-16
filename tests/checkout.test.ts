@@ -113,6 +113,20 @@ describe("createCheckout", () => {
     expect(checkout.getState().error).toBe("Insufficient wallet");
   });
 
+  it("pre-fills amount and ignores setAmount when lockAmount is true", async () => {
+    const mock = new MockFetch();
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      amount: "25.00",
+      lockAmount: true,
+    });
+    expect(checkout.getState().amount).toBe("25.00");
+    expect(checkout.getState().lockAmount).toBe(true);
+    await checkout.setAmount("99.00");
+    expect(checkout.getState().amount).toBe("25.00");
+  });
+
   it("closes with ongoing when polling is disabled", async () => {
     const mock = new MockFetch();
     mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);

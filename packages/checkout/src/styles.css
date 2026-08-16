@@ -39,6 +39,11 @@
   background: #fff;
 }
 
+.mm-input:disabled {
+  background: #eef0f2;
+  cursor: not-allowed;
+}
+
 .mm-phone {
   display: flex;
   gap: 0.5rem;

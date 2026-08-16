@@ -66,6 +66,10 @@ const checkout = createCheckout(session, {
 
 await checkout.loadCountries();
 mountCheckout(document.getElementById("checkout")!, checkout);
+
+Store plugins can pass `amount` and `lockAmount: true` so the wizard cannot
+edit a cart or order total. Omit `lockAmount` for open amounts (for example a
+donation shortcode).
 ```
 
 `pollUrl` and `pollHeaders` are required when `pollStatus` is true (the
