@@ -1,0 +1,32 @@
+{
+  "name": "mm-aggr-example-react",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5174 --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "@mainmoney/js-checkout": "file:../../packages/checkout",
+    "@mainmoney/js-core": "file:../../packages/core",
+    "@mainmoney/js-http": "file:../../packages/http",
+    "@mainmoney/js-react": "file:../../packages/react",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  },
+  "resolutions": {
+    "@mainmoney/js-checkout": "file:../../packages/checkout",
+    "@mainmoney/js-core": "file:../../packages/core",
+    "@mainmoney/js-http": "file:../../packages/http",
+    "@mainmoney/js-react": "file:../../packages/react"
+  }
+}

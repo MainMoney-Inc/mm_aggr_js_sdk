@@ -122,4 +122,9 @@ Copyright (c) 2026 MainMoney SARL. Licensed under the PolyForm Noncommercial
 License 1.0.0. Non-commercial use is allowed. Commercial use requires
 permission from MainMoney SARL. See [LICENSE](LICENSE).
 
+## Examples
+
+Runnable UIs live in [examples/](examples/) (vanilla JS, React, Vue, Angular).
+Point `VITE_MERCHANT_BACKEND_URL` at a Python, PHP, or Node backend example.
+
 Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).

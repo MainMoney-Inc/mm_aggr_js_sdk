@@ -23,6 +23,8 @@ npm test
 npm run build
 ```
 
+`@mainmoney/js-angular` is built with ng-packagr (Ivy partial compilation). Do not bundle that package with tsup.
+
 ## npm
 
 Packages: `@mainmoney/js-core`, `@mainmoney/js-http`, `@mainmoney/js-checkout`,
@@ -43,3 +45,4 @@ annotated tag (`v0.1.0`, then semver). Do not commit npm tokens.
   it must not send merchant API keys. Backend SDKs implement the pinned
   contract in the contrib hub `contract/`.
 - Do not commit secrets.
+- Local demos live under `examples/`.

@@ -1,0 +1,30 @@
+{
+  "name": "mm-aggr-example-vue",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5175 --host 127.0.0.1",
+    "build": "vue-tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "@mainmoney/js-checkout": "file:../../packages/checkout",
+    "@mainmoney/js-core": "file:../../packages/core",
+    "@mainmoney/js-http": "file:../../packages/http",
+    "@mainmoney/js-vue": "file:../../packages/vue",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.3",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vue-tsc": "^2.2.8"
+  },
+  "resolutions": {
+    "@mainmoney/js-checkout": "file:../../packages/checkout",
+    "@mainmoney/js-core": "file:../../packages/core",
+    "@mainmoney/js-http": "file:../../packages/http",
+    "@mainmoney/js-vue": "file:../../packages/vue"
+  }
+}

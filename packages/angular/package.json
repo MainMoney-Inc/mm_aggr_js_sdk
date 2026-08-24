@@ -11,25 +11,35 @@
     "url": "git+https://github.com/MainMoney-Inc/mm_aggr_js_sdk.git",
     "directory": "packages/angular"
   },
-  "main": "./dist/index.js",
-  "types": "./src/index.d.ts",
+  "sideEffects": false,
+  "main": "./dist/fesm2022/mainmoney-js-angular.mjs",
+  "module": "./dist/fesm2022/mainmoney-js-angular.mjs",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/fesm2022/mainmoney-js-angular.mjs"
     }
   },
-  "files": ["dist", "src/index.d.ts", "LICENSE", "README.md"],
+  "files": ["dist", "LICENSE", "README.md"],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --clean --external @angular/core --external @mainmoney/js-checkout"
+    "build": "ng-packagr -p ng-package.json -c tsconfig.lib.json"
   },
   "peerDependencies": {
     "@angular/core": ">=17"
   },
   "dependencies": {
-    "@mainmoney/js-checkout": "0.1.0"
+    "@mainmoney/js-checkout": "0.1.0",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@angular/compiler": "^19.2.0",
+    "@angular/compiler-cli": "^19.2.0",
+    "@angular/core": "^19.2.0",
+    "ng-packagr": "^19.2.0",
+    "typescript": "~5.8.2"
   }
 }
