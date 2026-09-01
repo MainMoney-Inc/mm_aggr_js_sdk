@@ -28,6 +28,7 @@ export function mountCheckout(element: HTMLElement, checkout: Checkout, options:
       const status = state.status?.status ?? "";
       element.append(messageStep(status.toUpperCase() === "SUCCESS" ? checkout.t("success") : checkout.t("failed")));
     }
+    appendError(element, state);
   };
   render(checkout.getState());
   return checkout.subscribe(render);
@@ -53,7 +54,7 @@ function countryStep(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   }
   select.addEventListener("change", () => {
     if (select.value !== "") {
-      void checkout.selectCountry(select.value);
+      run(() => checkout.selectCountry(select.value));
     }
   });
   wrap.append(select);
@@ -69,13 +70,7 @@ function detailsStep(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
     wrap.append(overviewRow(checkout.t("customerName"), state.customerName));
   }
   wrap.append(amountField(checkout, state));
-  if (state.error !== undefined) {
-    const error = document.createElement("div");
-    error.className = "mm-error";
-    error.textContent = state.error;
-    wrap.append(error);
-  }
-  wrap.append(actions(checkout, () => void checkout.goOverview(), checkout.t("next"), true));
+  wrap.append(actions(checkout, () => run(() => checkout.goOverview()), checkout.t("next"), true));
   return wrap;
 }
 
@@ -98,7 +93,7 @@ function overviewStep(checkout: Checkout, state: CheckoutSnapshot): HTMLElement 
       overviewRow(state.partnerFee.label ?? checkout.t("partnerFee"), `${state.partnerFee.amount} ${state.partnerFee.currency}`),
     );
   }
-  wrap.append(actions(checkout, () => void checkout.confirm(), checkout.t("confirm"), true));
+  wrap.append(actions(checkout, () => run(() => checkout.confirm()), checkout.t("confirm"), true));
   return wrap;
 }
 
@@ -150,7 +145,7 @@ function providerList(checkout: Checkout, state: CheckoutSnapshot): HTMLElement 
       row.append(badge);
     }
     row.addEventListener("click", () => {
-      void checkout.selectProvider(provider.code);
+      run(() => checkout.selectProvider(provider.code));
     });
     wrap.append(row);
   }
@@ -166,7 +161,7 @@ function identifierField(checkout: Checkout, state: CheckoutSnapshot, phone: boo
   input.value = state.identifier;
   input.addEventListener("input", () => checkout.setIdentifier(input.value));
   input.addEventListener("blur", () => {
-    void checkout.matchProvider();
+    run(() => checkout.matchProvider());
   });
   if (phone && state.selectedCountry?.phone_code) {
     const row = document.createElement("div");
@@ -186,6 +181,8 @@ function amountField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   const field = document.createElement("div");
   field.className = "mm-field";
   field.append(label(checkout.t("amount")));
+  const row = document.createElement("div");
+  row.className = "mm-amount-row";
   const input = document.createElement("input");
   input.className = "mm-input";
   input.value = state.amount;
@@ -195,11 +192,39 @@ function amountField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
     input.readOnly = true;
   } else {
     input.addEventListener("change", () => {
-      void checkout.setAmount(input.value);
+      run(() => checkout.setAmount(input.value));
     });
   }
-  field.append(input);
+  row.append(input);
+  row.append(currencySuffix(checkout, state));
+  field.append(row);
   return field;
+}
+
+function currencySuffix(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
+  if (state.lockCurrency) {
+    const badge = document.createElement("div");
+    badge.className = "mm-currency-suffix";
+    badge.textContent = state.currency;
+    return badge;
+  }
+  const select = document.createElement("select");
+  select.className = "mm-currency-suffix mm-select";
+  for (const code of state.availableCurrencies) {
+    const option = document.createElement("option");
+    option.value = code;
+    option.textContent = code;
+    if (state.currency === code) {
+      option.selected = true;
+    }
+    select.append(option);
+  }
+  select.addEventListener("change", () => {
+    if (select.value !== "") {
+      run(() => checkout.setCurrency(select.value));
+    }
+  });
+  return select;
 }
 
 function overviewRow(labelText: string, value: string): HTMLElement {
@@ -238,4 +263,18 @@ function label(text: string): HTMLElement {
   node.className = "mm-label";
   node.textContent = text;
   return node;
+}
+
+function appendError(parent: HTMLElement, state: CheckoutSnapshot): void {
+  if (state.error === undefined || state.error === "") {
+    return;
+  }
+  const error = document.createElement("div");
+  error.className = "mm-error";
+  error.textContent = state.error;
+  parent.append(error);
+}
+
+function run(op: () => Promise<void>): void {
+  void op().catch(() => undefined);
 }

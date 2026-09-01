@@ -60,6 +60,34 @@
   color: var(--mm-color-secondary);
 }
 
+.mm-amount-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mm-amount-row .mm-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mm-currency-suffix {
+  flex: 0 0 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e0e3e5;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--mm-color-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.65rem 0.5rem;
+}
+
+.mm-currency-suffix.mm-select {
+  cursor: pointer;
+}
+
 .mm-provider {
   display: flex;
   align-items: center;
@@ -80,13 +108,17 @@
 
 .mm-badge {
   font-size: 0.75rem;
-  color: var(--mm-color-accent);
+  color: var(--mm-color-primary);
+  font-weight: 600;
 }
 
-.mm-error {
-  color: #dc2626;
-  font-size: 0.875rem;
-  margin-bottom: 0.75rem;
+.mm-overview-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e0e3e5;
+  font-size: 0.9375rem;
 }
 
 .mm-actions {
@@ -96,11 +128,11 @@
 }
 
 .mm-button {
-  appearance: none;
-  border: 0;
-  border-radius: 999px;
-  padding: 0.7rem 1.1rem;
-  font-weight: 600;
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
   cursor: pointer;
 }
 
@@ -110,59 +142,48 @@
 }
 
 .mm-button-secondary {
-  background: transparent;
-  color: var(--mm-color-secondary);
-  border: 1px solid #e0e3e5;
+  background: #eef0f2;
+  color: #191c1e;
 }
 
-.mm-overview-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
+.mm-error {
+  margin-top: 1rem;
+  color: var(--mm-color-accent);
+  font-size: 0.875rem;
 }
 
 .mm-confirm {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.5rem 0;
+  text-align: center;
+  padding: 2rem 0;
 }
 
 .mm-spinner {
   position: relative;
-  width: 7.5rem;
-  height: 7.5rem;
-}
-
-.mm-spinner-logo {
-  width: 4.5rem;
-  height: 4.5rem;
-  object-fit: cover;
-  border-radius: 1.25rem;
-  opacity: 0.5;
-  position: absolute;
-  inset: 0;
-  margin: auto;
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 1rem;
 }
 
 .mm-spinner-curve {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
   border: 3px solid transparent;
   border-top-color: var(--mm-color-primary);
-  border-right-color: var(--mm-color-accent);
-  animation: mm-spin 1.1s linear infinite;
+  border-radius: 50%;
+  animation: mm-spin 1s linear infinite;
 }
 
-.mm-spinner-curve:nth-child(2) {
-  inset: 0.45rem;
-  animation-duration: 1.6s;
-  animation-direction: reverse;
+.mm-spinner-curve:last-child {
+  animation-delay: 0.15s;
   border-top-color: var(--mm-color-accent);
-  border-right-color: var(--mm-color-secondary);
+}
+
+.mm-spinner-logo {
+  position: absolute;
+  inset: 25%;
+  width: 50%;
+  height: 50%;
+  object-fit: contain;
 }
 
 @keyframes mm-spin {

@@ -38,6 +38,10 @@ describe("createCheckout", () => {
     expect(state.highlightedProviderCode).toBe("MPESA_KE");
     expect(state.customerName).toBe("Jane Doe");
     expect(state.selectedProvider?.code).toBe("MPESA_KE");
+    const providersCall = mock.calls.find((call) => call.url.includes("/providers"));
+    expect(providersCall?.url).toContain("operation_type=DEPOSIT");
+    const matchCall = mock.calls.find((call) => call.url.includes("/match-provider"));
+    expect(matchCall?.url).toContain("operation_type=DEPOSIT");
   });
 
   it("hides a null customer name", async () => {
@@ -111,6 +115,56 @@ describe("createCheckout", () => {
     await checkout.goOverview();
     expect(checkout.getState().step).toBe("details");
     expect(checkout.getState().error).toBe("Insufficient wallet");
+    const providersCall = mock.calls.find((call) => call.url.includes("/providers"));
+    expect(providersCall?.url).toContain("operation_type=PAYOUT");
+  });
+
+  it("stores a countries request failure on state instead of throwing", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(503, { message: "MainMoney is not configured" });
+    const checkout = createCheckout(sessionWith(mock), { operation: "deposit", pollStatus: false });
+    await checkout.loadCountries();
+    expect(checkout.getState().countries).toEqual([]);
+    expect(checkout.getState().error).toBe("MainMoney is not configured");
+  });
+
+  it("stores a providers request failure and stays on the country step", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(502, { message: "Provider list unavailable" });
+    const checkout = createCheckout(sessionWith(mock), { operation: "deposit", pollStatus: false });
+    await checkout.loadCountries();
+    await checkout.selectCountry("KE");
+    expect(checkout.getState().step).toBe("country");
+    expect(checkout.getState().selectedCountry).toBeUndefined();
+    expect(checkout.getState().error).toBe("Provider list unavailable");
+  });
+
+  it("returns to overview with the deposit error message when create fails", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [
+      { code: "MPESA_KE", name: "M-Pesa", entity_type: "MOBILE_MONEY", country_code: "KE", currency_code: "KES" },
+    ]);
+    mock.enqueue(200, []);
+    mock.enqueue(200, { total_merchant_fee: "0", net_amount: "10.00", currency: "KES" });
+    mock.enqueue(400, { message: "Amount is locked to the checkout session" });
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      reference: "ORDER-FAIL",
+    });
+    await checkout.loadCountries();
+    await checkout.selectCountry("KE");
+    await checkout.selectProvider("MPESA_KE");
+    checkout.setIdentifier("0712345678");
+    await checkout.setAmount("10.00");
+    await checkout.goOverview();
+    await checkout.confirm();
+    expect(checkout.getState().step).toBe("overview");
+    expect(checkout.getState().error).toBe("Amount is locked to the checkout session");
   });
 
   it("pre-fills amount and ignores setAmount when lockAmount is true", async () => {
@@ -185,5 +239,68 @@ describe("createCheckout", () => {
     expect(pollCall?.url).toContain("reference=ORDER-3");
     expect(checkout.getState().step).toBe("terminal");
     expect(checkout.getState().status?.status).toBe("SUCCESS");
+  });
+
+  it("does not call match-provider on identifier keystrokes", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [
+      {
+        code: "MPESA_KE",
+        name: "M-Pesa",
+        entity_type: "MOBILE_MONEY",
+        country_code: "KE",
+        currency_code: "KES",
+        accepted_currencies: ["KES"],
+      },
+    ]);
+    const checkout = createCheckout(sessionWith(mock), { operation: "deposit", pollStatus: false });
+    await checkout.loadCountries();
+    await checkout.selectCountry("KE");
+    checkout.setIdentifier("0");
+    checkout.setIdentifier("07");
+    checkout.setIdentifier("0712345678");
+    const matchCalls = mock.calls.filter((call) => call.url.includes("/match-provider"));
+    expect(matchCalls).toHaveLength(0);
+    await checkout.matchProvider();
+    expect(mock.calls.filter((call) => call.url.includes("/match-provider"))).toHaveLength(1);
+  });
+
+  it("uses accepted_currencies for currency selection", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [{ code: "CD", name: "Congo", phone_code: "243" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [
+      {
+        code: "SIM_CD",
+        name: "Simulator",
+        entity_type: "MOBILE_MONEY",
+        country_code: "CD",
+        currency_code: "CDF",
+        accepted_currencies: ["CDF", "USD"],
+      },
+    ]);
+    const checkout = createCheckout(sessionWith(mock), { operation: "deposit", pollStatus: false });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    expect(checkout.getState().availableCurrencies).toEqual(["CDF", "USD"]);
+    await checkout.selectProvider("SIM_CD");
+    expect(checkout.getState().currency).toBe("CDF");
+    await checkout.setCurrency("USD");
+    expect(checkout.getState().currency).toBe("USD");
+  });
+
+  it("locks currency when provided in options", async () => {
+    const mock = new MockFetch();
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      currency: "USD",
+      lockCurrency: true,
+    });
+    expect(checkout.getState().currency).toBe("USD");
+    expect(checkout.getState().lockCurrency).toBe(true);
+    expect(checkout.getState().availableCurrencies).toEqual(["USD"]);
   });
 });

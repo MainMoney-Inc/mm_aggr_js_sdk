@@ -31,6 +31,7 @@ export type Provider = {
   entity_type: string;
   country_code: string;
   currency_code: string;
+  accepted_currencies?: string[];
   is_active?: boolean;
 };
 

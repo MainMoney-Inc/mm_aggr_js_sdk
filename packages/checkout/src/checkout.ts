@@ -39,6 +39,8 @@ export type CreateCheckoutOptions = {
   reference?: string;
   amount?: string;
   lockAmount?: boolean;
+  currency?: string;
+  lockCurrency?: boolean;
   pollIntervalMs?: number;
   onPartnerFee?: (ctx: CheckoutSnapshot) => Promise<PartnerFee | null>;
   onValidateBalance?: (ctx: CheckoutSnapshot) => Promise<BalanceCheck>;
@@ -58,6 +60,8 @@ export type CheckoutSnapshot = {
   amount: string;
   lockAmount: boolean;
   currency: string;
+  lockCurrency: boolean;
+  availableCurrencies: string[];
   limits?: AmountLimit;
   fees?: FeeSimulation;
   partnerFee: PartnerFee | null;
@@ -75,12 +79,30 @@ export type Checkout = {
   selectProvider(code: string): Promise<void>;
   setIdentifier(value: string): void;
   matchProvider(): Promise<void>;
+  setCurrency(code: string): Promise<void>;
   setAmount(amount: string): Promise<void>;
   goOverview(): Promise<void>;
   goBack(): void;
   confirm(): Promise<void>;
   close(): void;
 };
+
+export function providerAcceptedCurrencies(provider: Provider): string[] {
+  if (provider.accepted_currencies !== undefined && provider.accepted_currencies.length > 0) {
+    return [...provider.accepted_currencies];
+  }
+  return [provider.currency_code];
+}
+
+export function unionProviderCurrencies(providers: Provider[]): string[] {
+  const codes = new Set<string>();
+  for (const provider of providers) {
+    for (const code of providerAcceptedCurrencies(provider)) {
+      codes.add(code);
+    }
+  }
+  return [...codes].sort();
+}
 
 export function createCheckout(session: Session, options: CreateCheckoutOptions): Checkout {
   const pollEnabled = options.pollStatus !== false;
@@ -98,6 +120,8 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   const theme = { ...session.theme, ...options.theme };
   const emitter = new Emitter();
   const pollAbort = new AbortController();
+  const explicitCurrency = options.currency?.trim() ?? "";
+  const lockCurrency = options.lockCurrency === true || explicitCurrency !== "";
 
   const state: CheckoutSnapshot = {
     step: "country",
@@ -108,16 +132,36 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     customerName: null,
     amount: options.amount ?? "",
     lockAmount: options.lockAmount === true,
-    currency: "",
+    currency: explicitCurrency,
+    lockCurrency,
+    availableCurrencies: explicitCurrency !== "" ? [explicitCurrency] : [],
     partnerFee: null,
     theme,
   };
+
+  let lastMatchedIdentifier = "";
 
   const notify = (): void => {
     emitter.emit("change", getState());
   };
 
   const getState = (): CheckoutSnapshot => structuredClone(state);
+
+  const messageFromError = (error: unknown): string => {
+    if (error instanceof Error && error.message !== "") {
+      return error.message;
+    }
+    return "Merchant backend request failed";
+  };
+
+  const fail = (error: unknown): void => {
+    state.error = messageFromError(error);
+    notify();
+  };
+
+  const routingOperationType = (): "DEPOSIT" | "PAYOUT" => {
+    return state.operation === "deposit" ? "DEPOSIT" : "PAYOUT";
+  };
 
   const paginated = <T>(payload: unknown): T[] => {
     if (Array.isArray(payload)) {
@@ -129,9 +173,28 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     return [];
   };
 
+  const applyProviderCurrency = (provider: Provider): void => {
+    if (state.lockCurrency) {
+      return;
+    }
+    const accepted = providerAcceptedCurrencies(provider);
+    state.availableCurrencies = accepted;
+    if (accepted.includes(provider.currency_code)) {
+      state.currency = provider.currency_code;
+    } else if (accepted.length > 0) {
+      state.currency = accepted[0];
+    }
+  };
+
   const loadCountries = async (): Promise<void> => {
-    const payload = await http.get<unknown>(session.paths.countries);
-    state.countries = paginated<Country>(payload);
+    try {
+      const payload = await http.get<unknown>(session.paths.countries);
+      state.countries = paginated<Country>(payload);
+      state.error = undefined;
+    } catch (error) {
+      fail(error);
+      return;
+    }
     try {
       const prefs = await http.get<Record<string, unknown>>(session.paths.checkoutPreferences);
       if (prefs.primary_color !== undefined) {
@@ -151,70 +214,123 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   const selectCountry = async (code: string): Promise<void> => {
     const country = state.countries.find((item) => item.code === code);
     if (country === undefined) {
-      throw new ConfigurationException("Unknown country");
+      fail(new ConfigurationException("Unknown country"));
+      return;
     }
-    state.selectedCountry = country;
-    state.selectedProvider = undefined;
-    state.highlightedProviderCode = undefined;
-    state.customerName = null;
-    const payload = await http.get<unknown>(session.paths.providers, { country: code });
-    state.providers = paginated<Provider>(payload);
-    state.step = "details";
-    notify();
+    try {
+      const payload = await http.get<unknown>(session.paths.providers, {
+        country: code,
+        operation_type: routingOperationType(),
+      });
+      state.selectedCountry = country;
+      state.selectedProvider = undefined;
+      state.highlightedProviderCode = undefined;
+      state.customerName = null;
+      lastMatchedIdentifier = "";
+      state.providers = paginated<Provider>(payload);
+      if (!state.lockCurrency) {
+        state.availableCurrencies = unionProviderCurrencies(state.providers);
+        if (state.currency === "" && state.availableCurrencies.length > 0) {
+          state.currency = state.availableCurrencies[0];
+        }
+      }
+      state.error = undefined;
+      state.step = "details";
+      notify();
+    } catch (error) {
+      fail(error);
+    }
   };
 
   const selectProvider = async (code: string): Promise<void> => {
     const provider = state.providers.find((item) => item.code === code);
     if (provider === undefined) {
-      throw new ConfigurationException("Unknown provider");
+      fail(new ConfigurationException("Unknown provider"));
+      return;
     }
-    state.selectedProvider = provider;
-    state.currency = provider.currency_code;
-    await refreshLimitsAndFees();
-    notify();
+    try {
+      state.selectedProvider = provider;
+      applyProviderCurrency(provider);
+      await refreshLimitsAndFees();
+      notify();
+    } catch (error) {
+      fail(error);
+    }
   };
 
   const setIdentifier = (value: string): void => {
     state.identifier = value;
-    notify();
+    // Do not notify: full re-render destroys the input and fires blur → matchProvider.
   };
 
   const matchProvider = async (): Promise<void> => {
-    if (state.identifier.trim() === "") {
+    const trimmed = state.identifier.trim();
+    if (trimmed === "") {
       return;
     }
-    const payload = await http.get<Record<string, unknown>>(session.paths.matchProvider, {
-      account_number: e164OrIdentifier(),
-      get_lookup: true,
-    });
-    const entity = typeof payload.entity === "string" ? payload.entity : undefined;
-    if (entity !== undefined) {
-      state.highlightedProviderCode = entity;
-      const matched = state.providers.find((item) => item.code === entity);
-      if (matched !== undefined) {
-        state.selectedProvider = matched;
-        state.currency = matched.currency_code;
-      }
+    if (trimmed === lastMatchedIdentifier) {
+      return;
     }
-    state.customerName = extractCustomerName(payload);
-    await refreshLimitsAndFees();
-    notify();
+    try {
+      const payload = await http.get<Record<string, unknown>>(session.paths.matchProvider, {
+        account_number: e164OrIdentifier(),
+        get_lookup: true,
+        operation_type: routingOperationType(),
+      });
+      const entity = typeof payload.entity === "string" ? payload.entity : undefined;
+      if (entity !== undefined) {
+        state.highlightedProviderCode = entity;
+        const matched = state.providers.find((item) => item.code === entity);
+        if (matched !== undefined) {
+          state.selectedProvider = matched;
+          applyProviderCurrency(matched);
+        }
+      }
+      state.customerName = extractCustomerName(payload);
+      lastMatchedIdentifier = trimmed;
+      await refreshLimitsAndFees();
+      notify();
+    } catch (error) {
+      fail(error);
+    }
+  };
+
+  const setCurrency = async (code: string): Promise<void> => {
+    if (state.lockCurrency) {
+      return;
+    }
+    const normalized = code.trim().toUpperCase();
+    if (normalized === "" || !state.availableCurrencies.includes(normalized)) {
+      fail(new ConfigurationException("Unknown currency"));
+      return;
+    }
+    try {
+      state.currency = normalized;
+      await refreshLimitsAndFees();
+      notify();
+    } catch (error) {
+      fail(error);
+    }
   };
 
   const setAmount = async (amount: string): Promise<void> => {
     if (state.lockAmount) {
       return;
     }
-    state.amount = amount;
-    await refreshLimitsAndFees();
-    notify();
+    try {
+      state.amount = amount;
+      await refreshLimitsAndFees();
+      notify();
+    } catch (error) {
+      fail(error);
+    }
   };
 
   const refreshLimitsAndFees = async (): Promise<void> => {
     if (state.selectedProvider === undefined || state.amount.trim() === "" || state.currency === "") {
       return;
     }
-    const operation = state.operation === "deposit" ? "DEPOSIT" : "PAYOUT";
+    const operation = routingOperationType();
     const limitsPayload = await http.get<unknown>(session.paths.amountLimits, {
       financial_entity_code: state.selectedProvider.code,
       currency: state.currency,
@@ -249,29 +365,34 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       notify();
       return;
     }
-    if (state.identifier.trim() === "" || state.amount.trim() === "") {
+    if (state.identifier.trim() === "" || state.amount.trim() === "" || state.currency === "") {
       state.error = t("required");
       notify();
       return;
     }
-    if (options.onPartnerFee !== undefined) {
-      const fee = await options.onPartnerFee(getState());
-      if (fee !== null && fee.currency !== state.currency) {
-        throw new CurrencyMismatchException();
+    try {
+      if (options.onPartnerFee !== undefined) {
+        const fee = await options.onPartnerFee(getState());
+        if (fee !== null && fee.currency !== state.currency) {
+          fail(new CurrencyMismatchException());
+          return;
+        }
+        state.partnerFee = fee;
       }
-      state.partnerFee = fee;
-    }
-    if (state.operation === "payout" && options.onValidateBalance !== undefined) {
-      const result = await options.onValidateBalance(getState());
-      if (!result.ok) {
-        state.error = result.message ?? t("balanceRejected");
-        notify();
-        return;
+      if (state.operation === "payout" && options.onValidateBalance !== undefined) {
+        const result = await options.onValidateBalance(getState());
+        if (!result.ok) {
+          state.error = result.message ?? t("balanceRejected");
+          notify();
+          return;
+        }
       }
+      state.error = undefined;
+      state.step = "overview";
+      notify();
+    } catch (error) {
+      fail(error);
     }
-    state.error = undefined;
-    state.step = "overview";
-    notify();
   };
 
   const goBack = (): void => {
@@ -285,66 +406,73 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
 
   const confirm = async (): Promise<void> => {
     if (state.selectedProvider === undefined) {
-      throw new ConfigurationException("Provider is required");
+      fail(new ConfigurationException("Provider is required"));
+      return;
     }
     state.step = "confirming";
+    state.error = undefined;
     notify();
-    const reference = options.reference ?? crypto.randomUUID();
-    const createAmount = depositAmount();
-    let created: StatusPayload;
-    if (state.operation === "deposit") {
-      const payload: Record<string, unknown> = {
-        provider_code: state.selectedProvider.code,
-        reference,
-        amount: createAmount,
-        currency: state.currency,
-        customer_phone: e164OrIdentifier(),
-      };
-      if (state.customerName !== null) {
-        payload.customer_name = state.customerName;
+    try {
+      const reference = options.reference ?? crypto.randomUUID();
+      const createAmount = depositAmount();
+      let created: StatusPayload;
+      if (state.operation === "deposit") {
+        const payload: Record<string, unknown> = {
+          provider_code: state.selectedProvider.code,
+          reference,
+          amount: createAmount,
+          currency: state.currency,
+          customer_phone: e164OrIdentifier(),
+        };
+        if (state.customerName !== null) {
+          payload.customer_name = state.customerName;
+        }
+        created = await http.post<StatusPayload>(session.paths.deposits, payload, {
+          "Idempotency-Key": reference,
+        });
+      } else {
+        created = await http.post<StatusPayload>(session.paths.payouts, {
+          provider_code: state.selectedProvider.code,
+          reference,
+          amount: state.amount,
+          currency: state.currency,
+          destination_account: e164OrIdentifier(),
+        }, { "Idempotency-Key": reference });
       }
-      created = await http.post<StatusPayload>(session.paths.deposits, payload, {
-        "Idempotency-Key": reference,
-      });
-    } else {
-      created = await http.post<StatusPayload>(session.paths.payouts, {
-        provider_code: state.selectedProvider.code,
+      state.status = created;
+      if (typeof created.status === "string" && isTerminalStatus(created.status)) {
+        state.step = "terminal";
+        notify();
+        emitter.emit("complete", getState());
+        return;
+      }
+      if (!pollEnabled) {
+        state.step = "ongoing";
+        notify();
+        emitter.emit("ongoing", getState());
+        return;
+      }
+      state.step = "polling";
+      notify();
+      const status = await pollStatus({
+        pollUrl: options.pollUrl ?? "",
+        pollHeaders: options.pollHeaders ?? {},
+        fetchImpl: session.fetch,
         reference,
-        amount: state.amount,
-        currency: state.currency,
-        destination_account: e164OrIdentifier(),
-      }, { "Idempotency-Key": reference });
-    }
-    state.status = created;
-    if (typeof created.status === "string" && isTerminalStatus(created.status)) {
+        operation: state.operation,
+        intervalMs: options.pollIntervalMs ?? 2000,
+        signal: pollAbort.signal,
+      });
+      state.status = status;
       state.step = "terminal";
       notify();
       emitter.emit("complete", getState());
-      return;
-    }
-    if (!pollEnabled) {
-      state.step = "ongoing";
-      notify();
-      emitter.emit("ongoing", getState());
-      return;
-    }
-    state.step = "polling";
-    notify();
-    const status = await pollStatus({
-      pollUrl: options.pollUrl ?? "",
-      pollHeaders: options.pollHeaders ?? {},
-      fetchImpl: session.fetch,
-      reference,
-      operation: state.operation,
-      intervalMs: options.pollIntervalMs ?? 2000,
-      signal: pollAbort.signal,
-    });
-    state.status = status;
-    state.step = "terminal";
-    notify();
-    emitter.emit("complete", getState());
-    if (typeof status.status === "string") {
-      emitter.emit("status", status);
+      if (typeof status.status === "string") {
+        emitter.emit("status", status);
+      }
+    } catch (error) {
+      state.step = "overview";
+      fail(error);
     }
   };
 
@@ -380,6 +508,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     selectProvider,
     setIdentifier,
     matchProvider,
+    setCurrency,
     setAmount,
     goOverview,
     goBack,
