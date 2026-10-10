@@ -14,7 +14,7 @@
     "@angular/forms": "^19.2.0",
     "@angular/platform-browser": "^19.2.0",
     "@angular/router": "^19.2.0",
-    "@mainmoney/js-angular": "file:../../packages/angular",
+    "@mainmoney/js-angular": "file:../../packages/angular/dist",
     "@mainmoney/js-checkout": "file:../../packages/checkout",
     "@mainmoney/js-core": "file:../../packages/core",
     "@mainmoney/js-http": "file:../../packages/http",
@@ -29,7 +29,7 @@
     "typescript": "~5.8.2"
   },
   "resolutions": {
-    "@mainmoney/js-angular": "file:../../packages/angular",
+    "@mainmoney/js-angular": "file:../../packages/angular/dist",
     "@mainmoney/js-checkout": "file:../../packages/checkout",
     "@mainmoney/js-core": "file:../../packages/core",
     "@mainmoney/js-http": "file:../../packages/http"

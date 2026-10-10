@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w @mainmoney/js-core -w @mainmoney/js-http && npm run build -w @mainmoney/js-checkout && npm run build -w @mainmoney/js-react -w @mainmoney/js-vue -w @mainmoney/js-angular --if-present",
     "test": "vitest run",
     "typecheck": "npm run typecheck -w @mainmoney/js-core -w @mainmoney/js-http -w @mainmoney/js-checkout"
   },
