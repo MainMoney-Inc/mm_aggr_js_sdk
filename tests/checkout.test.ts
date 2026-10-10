@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ConfigurationException, createSession } from "../packages/core/src/index.ts";
-import { createCheckout } from "../packages/checkout/src/index.ts";
+import { createCheckout, toE164Digits } from "../packages/checkout/src/index.ts";
 import { MockFetch } from "./mock-fetch.ts";
 
 function sessionWith(mock: MockFetch) {
@@ -302,5 +302,18 @@ describe("createCheckout", () => {
     expect(checkout.getState().currency).toBe("USD");
     expect(checkout.getState().lockCurrency).toBe(true);
     expect(checkout.getState().availableCurrencies).toEqual(["USD"]);
+  });
+});
+
+describe("toE164Digits", () => {
+  it.each(["812345678", "0812345678", "+243812345678", "243812345678", "00243812345678", "+243 (0)81 234 5678"])(
+    "prepends the dial code exactly once for %s",
+    (input) => {
+      expect(toE164Digits(input, "243")).toBe("243812345678");
+    },
+  );
+
+  it("keeps a national number that merely starts with the dial code", () => {
+    expect(toE164Digits("243123456", "243")).toBe("243243123456");
   });
 });

@@ -23,6 +23,8 @@ export type Country = {
   name: string;
   iso3_code?: string;
   phone_code?: string;
+  /** Absolute flag image URL; null when none is uploaded. */
+  flag?: string | null;
 };
 
 export type Provider = {
@@ -32,6 +34,8 @@ export type Provider = {
   country_code: string;
   currency_code: string;
   accepted_currencies?: string[];
+  /** Absolute provider logo URL; null when none is uploaded. */
+  logo?: string | null;
   is_active?: boolean;
 };
 
@@ -54,7 +58,16 @@ export type FeeSimulation = {
   promotion_discount: string;
   total_merchant_fee: string;
   net_amount: string;
+  /** Checkout fee box: merchant_receives + processing_fee = total_to_pay when MERCHANT bears fees. */
+  fee_bearer?: FeeBearer;
+  merchant_receives?: string;
+  processing_fee?: string;
+  total_to_pay?: string;
 };
+
+export type FeeBearer = "MERCHANT" | "CUSTOMER";
+
+export type PaymentMethod = "mobile_money" | "card" | "mainmoney";
 
 export type PartnerFee = {
   amount: string;

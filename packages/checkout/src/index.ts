@@ -1,5 +1,6 @@
 export {
   createCheckout,
+  toE164Digits,
   type BalanceCheck,
   type Checkout,
   type CheckoutSnapshot,

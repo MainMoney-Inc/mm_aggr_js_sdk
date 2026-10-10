@@ -10,12 +10,15 @@ import {
   isPhoneIdentifier,
   isTerminalStatus,
   type AmountLimit,
+  type CheckoutLocale,
   type CheckoutTheme,
   type Country,
+  type FeeBearer,
   type FeeSimulation,
   type MessageCatalog,
   type OperationType,
   type PartnerFee,
+  type PaymentMethod,
   type Provider,
   type Session,
   type StatusPayload,
@@ -33,7 +36,7 @@ export type CreateCheckoutOptions = {
   pollStatus?: boolean;
   pollUrl?: string;
   pollHeaders?: Record<string, string>;
-  locale?: "en" | "fr";
+  locale?: CheckoutLocale;
   messages?: Partial<MessageCatalog>;
   theme?: Partial<CheckoutTheme>;
   reference?: string;
@@ -65,6 +68,15 @@ export type CheckoutSnapshot = {
   limits?: AmountLimit;
   fees?: FeeSimulation;
   partnerFee: PartnerFee | null;
+  locale: CheckoutLocale;
+  /** Tabs enabled for the merchant (from checkout preferences); defaults to mobile money only. */
+  paymentMethods: PaymentMethod[];
+  activeMethod: PaymentMethod;
+  feeBearer: FeeBearer;
+  /** Optional address for the payment receipt. */
+  customerEmail: string;
+  /** True when the form is complete enough for `pay()`. Computed on every `getState()`. */
+  canPay: boolean;
   error?: string;
   status?: StatusPayload;
   theme: CheckoutTheme;
@@ -78,14 +90,42 @@ export type Checkout = {
   selectCountry(code: string): Promise<void>;
   selectProvider(code: string): Promise<void>;
   setIdentifier(value: string): void;
+  setCustomerEmail(value: string): void;
+  setMethod(method: PaymentMethod): void;
+  setLocale(locale: CheckoutLocale): void;
   matchProvider(): Promise<void>;
   setCurrency(code: string): Promise<void>;
   setAmount(amount: string): Promise<void>;
   goOverview(): Promise<void>;
   goBack(): void;
+  /** Single-form flow: resolve the provider, run merchant hooks, then confirm without an overview step. */
+  pay(): Promise<void>;
   confirm(): Promise<void>;
   close(): void;
 };
+
+/** Shortest national number that can follow a dial code the customer already typed. */
+const MIN_NATIONAL_AFTER_DIAL_CODE = 8;
+
+/** Plausible length of a national mobile number (E.164 allows up to 15 digits including the dial code). */
+const MIN_LOCAL_NUMBER_DIGITS = 7;
+const MAX_LOCAL_NUMBER_DIGITS = 12;
+
+/**
+ * Builds `<dialCode><national>` (digits only) from whatever the customer typed:
+ * `812345678`, `0812345678`, `+243812345678`, `00243812345678` all yield `243812345678`.
+ * A dial code is only stripped when enough digits remain, so a national number that
+ * merely starts with the same digits is left alone.
+ */
+export function toE164Digits(input: string, dialCode: string): string {
+  const code = dialCode.replace(/\D/g, "");
+  const digits = input.replace(/\D/g, "").replace(/^0+/, "");
+  const national =
+    digits.startsWith(code) && digits.length - code.length >= MIN_NATIONAL_AFTER_DIAL_CODE
+      ? digits.slice(code.length).replace(/^0+/, "")
+      : digits;
+  return `${code}${national}`;
+}
 
 export function providerAcceptedCurrencies(provider: Provider): string[] {
   if (provider.accepted_currencies !== undefined && provider.accepted_currencies.length > 0) {
@@ -116,7 +156,9 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   }
 
   const http = options.http ?? createHttp(session);
-  const t = createTranslator(options.locale ?? session.locale, { ...session.messages, ...options.messages });
+  const catalogOverrides = { ...session.messages, ...options.messages };
+  let translate = createTranslator(options.locale ?? session.locale, catalogOverrides);
+  const t = (key: string, vars?: Record<string, string>): string => translate(key, vars);
   const theme = { ...session.theme, ...options.theme };
   const emitter = new Emitter();
   const pollAbort = new AbortController();
@@ -136,16 +178,45 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     lockCurrency,
     availableCurrencies: explicitCurrency !== "" ? [explicitCurrency] : [],
     partnerFee: null,
+    locale: options.locale ?? session.locale,
+    paymentMethods: ["mobile_money"],
+    activeMethod: "mobile_money",
+    feeBearer: "MERCHANT",
+    customerEmail: "",
+    canPay: false,
     theme,
   };
 
   let lastMatchedIdentifier = "";
+  let returnStep: CheckoutStep = "overview";
 
   const notify = (): void => {
     emitter.emit("change", getState());
   };
 
-  const getState = (): CheckoutSnapshot => structuredClone(state);
+  const getState = (): CheckoutSnapshot => ({ ...structuredClone(state), canPay: computeCanPay() });
+
+  /** Digits a customer must type: long enough to be a local number, short enough to exclude pasted junk. */
+  const hasValidLocalNumber = (): boolean => {
+    const digits = e164OrIdentifier().replace(/\D/g, "");
+    const dial = state.selectedCountry?.phone_code?.replace(/\D/g, "") ?? "";
+    const national = digits.length - dial.length;
+    return national >= MIN_LOCAL_NUMBER_DIGITS && national <= MAX_LOCAL_NUMBER_DIGITS;
+  };
+
+  const computeCanPay = (): boolean => {
+    const amount = Number(state.amount);
+    return (
+      state.step === "details" &&
+      state.activeMethod === "mobile_money" &&
+      state.selectedCountry !== undefined &&
+      state.providers.length > 0 &&
+      state.currency !== "" &&
+      Number.isFinite(amount) &&
+      amount > 0 &&
+      hasValidLocalNumber()
+    );
+  };
 
   const messageFromError = (error: unknown): string => {
     if (error instanceof Error && error.message !== "") {
@@ -186,6 +257,21 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     }
   };
 
+  const PAYMENT_METHODS: PaymentMethod[] = ["mobile_money", "card", "mainmoney"];
+
+  const applyPaymentPreferences = (prefs: Record<string, unknown>): void => {
+    if (Array.isArray(prefs.payment_methods)) {
+      const methods = PAYMENT_METHODS.filter((method) => (prefs.payment_methods as unknown[]).includes(method));
+      state.paymentMethods = methods;
+      if (!methods.includes(state.activeMethod)) {
+        state.activeMethod = methods[0] ?? "mobile_money";
+      }
+    }
+    if (prefs.fee_bearer === "CUSTOMER" || prefs.fee_bearer === "MERCHANT") {
+      state.feeBearer = prefs.fee_bearer;
+    }
+  };
+
   const loadCountries = async (): Promise<void> => {
     try {
       const payload = await http.get<unknown>(session.paths.countries);
@@ -197,6 +283,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     }
     try {
       const prefs = await http.get<Record<string, unknown>>(session.paths.checkoutPreferences);
+      applyPaymentPreferences(prefs);
       if (prefs.primary_color !== undefined) {
         state.theme = {
           primary: String(prefs.primary_color ?? state.theme.primary),
@@ -236,6 +323,11 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       }
       state.error = undefined;
       state.step = "details";
+      if (state.providers.length === 1 && state.operation === "deposit") {
+        state.selectedProvider = state.providers[0];
+        applyProviderCurrency(state.providers[0]);
+        await refreshLimitsAndFees();
+      }
       notify();
     } catch (error) {
       fail(error);
@@ -261,6 +353,28 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   const setIdentifier = (value: string): void => {
     state.identifier = value;
     // Do not notify: full re-render destroys the input and fires blur → matchProvider.
+  };
+
+  const setCustomerEmail = (value: string): void => {
+    state.customerEmail = value.trim();
+  };
+
+  const setMethod = (method: PaymentMethod): void => {
+    if (!state.paymentMethods.includes(method) || state.activeMethod === method) {
+      return;
+    }
+    state.activeMethod = method;
+    state.error = undefined;
+    notify();
+  };
+
+  const setLocale = (locale: CheckoutLocale): void => {
+    if (state.locale === locale) {
+      return;
+    }
+    state.locale = locale;
+    translate = createTranslator(locale, catalogOverrides);
+    notify();
   };
 
   const matchProvider = async (): Promise<void> => {
@@ -359,23 +473,24 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     });
   };
 
-  const goOverview = async (): Promise<void> => {
+  /** Validate the form and run merchant hooks. Returns false (with `state.error` set) when blocked. */
+  const prepare = async (): Promise<boolean> => {
     if (state.selectedCountry === undefined || state.selectedProvider === undefined) {
       state.error = t("required");
       notify();
-      return;
+      return false;
     }
     if (state.identifier.trim() === "" || state.amount.trim() === "" || state.currency === "") {
       state.error = t("required");
       notify();
-      return;
+      return false;
     }
     try {
       if (options.onPartnerFee !== undefined) {
         const fee = await options.onPartnerFee(getState());
         if (fee !== null && fee.currency !== state.currency) {
           fail(new CurrencyMismatchException());
-          return;
+          return false;
         }
         state.partnerFee = fee;
       }
@@ -384,14 +499,39 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         if (!result.ok) {
           state.error = result.message ?? t("balanceRejected");
           notify();
-          return;
+          return false;
         }
       }
       state.error = undefined;
-      state.step = "overview";
-      notify();
+      return true;
     } catch (error) {
       fail(error);
+      return false;
+    }
+  };
+
+  const goOverview = async (): Promise<void> => {
+    if (await prepare()) {
+      state.step = "overview";
+      notify();
+    }
+  };
+
+  const pay = async (): Promise<void> => {
+    if (state.activeMethod !== "mobile_money") {
+      return;
+    }
+    if (state.selectedProvider === undefined || lastMatchedIdentifier !== state.identifier.trim()) {
+      await matchProvider();
+    }
+    if (state.selectedProvider === undefined) {
+      state.error = t("selectProvider");
+      notify();
+      return;
+    }
+    if (await prepare()) {
+      returnStep = "details";
+      await confirm();
     }
   };
 
@@ -426,6 +566,9 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         };
         if (state.customerName !== null) {
           payload.customer_name = state.customerName;
+        }
+        if (state.customerEmail !== "") {
+          payload.customer_email = state.customerEmail;
         }
         created = await http.post<StatusPayload>(session.paths.deposits, payload, {
           "Idempotency-Key": reference,
@@ -471,17 +614,25 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         emitter.emit("status", status);
       }
     } catch (error) {
-      state.step = "overview";
+      state.step = returnStep;
       fail(error);
     }
   };
 
   const depositAmount = (): string => {
-    if (state.partnerFee === null || state.operation !== "deposit") {
+    if (state.operation !== "deposit") {
       return state.amount;
     }
+    // With CUSTOMER as fee bearer the customer pays amount + processing fee.
+    const base =
+      state.feeBearer === "CUSTOMER" && state.fees?.total_to_pay !== undefined
+        ? Number(state.fees.total_to_pay).toFixed(2)
+        : state.amount;
+    if (state.partnerFee === null) {
+      return base;
+    }
     return addMoney(
-      { amount: state.amount, currency: state.currency },
+      { amount: base, currency: state.currency },
       { amount: state.partnerFee.amount, currency: state.partnerFee.currency },
     ).amount;
   };
@@ -491,8 +642,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     if (!isPhoneIdentifier(state.selectedProvider) || state.selectedCountry?.phone_code === undefined) {
       return raw;
     }
-    const national = raw.replace(/\D/g, "").replace(/^0+/, "");
-    return `${state.selectedCountry.phone_code}${national}`;
+    return toE164Digits(raw, state.selectedCountry.phone_code);
   };
 
   const close = (): void => {
@@ -507,11 +657,15 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     selectCountry,
     selectProvider,
     setIdentifier,
+    setCustomerEmail,
+    setMethod,
+    setLocale,
     matchProvider,
     setCurrency,
     setAmount,
     goOverview,
     goBack,
+    pay,
     confirm,
     close,
   };

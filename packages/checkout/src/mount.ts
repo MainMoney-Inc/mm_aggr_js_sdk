@@ -2,18 +2,60 @@
 
 import { applyTheme, isPhoneIdentifier } from "@mainmoney/js-core";
 
+import { DEFAULT_LOGO_URL } from "./assets/logo.js";
 import type { Checkout, CheckoutSnapshot } from "./checkout.js";
+import { formBody, formChrome, type FooterLinks } from "./form.js";
 
 export type MountOptions = {
   logoUrl?: string;
+  /** `form` is the single-page checkout (default for deposits); `wizard` is the step-by-step flow (default for payouts). */
+  layout?: "form" | "wizard";
+  /** Country preselected in the form layout; defaults to the first allowed country. */
+  defaultCountry?: string;
+  /** Footer links; only links with a URL are shown. */
+  links?: FooterLinks;
 };
 
 export function mountCheckout(element: HTMLElement, checkout: Checkout, options: MountOptions = {}): () => void {
-  const logoUrl = options.logoUrl ?? new URL("./assets/main_money_square.png", import.meta.url).href;
+  const logoUrl = options.logoUrl ?? DEFAULT_LOGO_URL;
+  const useForm = (state: CheckoutSnapshot): boolean => (options.layout ?? (state.operation === "deposit" ? "form" : "wizard")) === "form";
+  let preselecting = false;
+
+  const renderForm = (state: CheckoutSnapshot): void => {
+    if (state.step === "country" && state.countries.length > 0 && !preselecting) {
+      preselecting = true;
+      const preferred = state.countries.find((country) => country.code === options.defaultCountry) ?? state.countries[0];
+      void checkout
+        .selectCountry(preferred.code)
+        .catch(() => undefined)
+        .finally(() => {
+          preselecting = false;
+        });
+    }
+    let body: HTMLElement;
+    if (state.step === "confirming" || state.step === "polling") {
+      body = confirmingStep(checkout, state, logoUrl);
+    } else if (state.step === "ongoing") {
+      body = messageStep(checkout.t("ongoing"));
+    } else if (state.step === "terminal") {
+      const status = state.status?.status ?? "";
+      body = messageStep(status.toUpperCase() === "SUCCESS" ? checkout.t("success") : checkout.t("failed"));
+    } else {
+      body = formBody(checkout, state);
+    }
+    element.append(formChrome(checkout, state, logoUrl, options.links ?? {}, body));
+  };
+
   const render = (state: CheckoutSnapshot): void => {
     applyTheme(element, state.theme);
     element.classList.add("mm-checkout");
     element.innerHTML = "";
+    if (useForm(state)) {
+      element.classList.add("mm-checkout-form");
+      renderForm(state);
+      return;
+    }
+    element.classList.remove("mm-checkout-form");
     if (state.step === "country") {
       element.append(countryStep(checkout, state));
     } else if (state.step === "details") {
