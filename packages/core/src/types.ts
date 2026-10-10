@@ -63,6 +63,15 @@ export type FeeSimulation = {
   merchant_receives?: string;
   processing_fee?: string;
   total_to_pay?: string;
+  /** Fee plan: platform fees are computed on `base_amount` (= amount + merchant fee on deposits). */
+  merchant_fee?: string;
+  base_amount?: string;
+  charged_fees?: string;
+  provider_fee_declarative?: boolean;
+  /** What the provider processes: the customer's payment (deposit) or the recipient's amount (payout). */
+  provider_amount?: string;
+  /** Deposit: credited after fees. Payout: debited (negative). */
+  merchant_wallet_effect?: string;
 };
 
 export type FeeBearer = "MERCHANT" | "CUSTOMER";

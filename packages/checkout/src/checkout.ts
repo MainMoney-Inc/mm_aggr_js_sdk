@@ -4,7 +4,6 @@ import {
   ConfigurationException,
   CurrencyMismatchException,
   Emitter,
-  addMoney,
   createTranslator,
   extractCustomerName,
   isPhoneIdentifier,
@@ -41,6 +40,8 @@ export type CreateCheckoutOptions = {
   theme?: Partial<CheckoutTheme>;
   reference?: string;
   amount?: string;
+  /** Merchant fee added on top of `amount` (deposits; the merchant must be allowed to add fees). */
+  fees?: string;
   lockAmount?: boolean;
   currency?: string;
   lockCurrency?: boolean;
@@ -465,11 +466,13 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         state.error = undefined;
       }
     }
+    const fees = merchantFees();
     state.fees = await http.post<FeeSimulation>(session.paths.feesSimulate, {
       provider_code: state.selectedProvider.code,
       operation_type: operation,
       amount: state.amount,
       currency: state.currency,
+      ...(fees !== "" ? { fees } : {}),
     });
   };
 
@@ -554,13 +557,12 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     notify();
     try {
       const reference = options.reference ?? crypto.randomUUID();
-      const createAmount = depositAmount();
       let created: StatusPayload;
       if (state.operation === "deposit") {
         const payload: Record<string, unknown> = {
           provider_code: state.selectedProvider.code,
           reference,
-          amount: createAmount,
+          amount: state.amount,
           currency: state.currency,
           customer_phone: e164OrIdentifier(),
         };
@@ -569,6 +571,11 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         }
         if (state.customerEmail !== "") {
           payload.customer_email = state.customerEmail;
+        }
+        // The merchant's own fee travels as `fees`; it is never folded into `amount`.
+        const fees = merchantFees();
+        if (fees !== "") {
+          payload.fees = fees;
         }
         created = await http.post<StatusPayload>(session.paths.deposits, payload, {
           "Idempotency-Key": reference,
@@ -619,22 +626,12 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     }
   };
 
-  const depositAmount = (): string => {
+  /** Merchant fee sent as `fees` on deposits: the dynamic partner fee wins over the static option. Never on payouts. */
+  const merchantFees = (): string => {
     if (state.operation !== "deposit") {
-      return state.amount;
+      return "";
     }
-    // With CUSTOMER as fee bearer the customer pays amount + processing fee.
-    const base =
-      state.feeBearer === "CUSTOMER" && state.fees?.total_to_pay !== undefined
-        ? Number(state.fees.total_to_pay).toFixed(2)
-        : state.amount;
-    if (state.partnerFee === null) {
-      return base;
-    }
-    return addMoney(
-      { amount: base, currency: state.currency },
-      { amount: state.partnerFee.amount, currency: state.partnerFee.currency },
-    ).amount;
+    return state.partnerFee?.amount ?? options.fees ?? "";
   };
 
   const e164OrIdentifier = (): string => {

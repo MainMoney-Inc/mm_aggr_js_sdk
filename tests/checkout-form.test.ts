@@ -132,7 +132,7 @@ describe("checkout form flow", () => {
     expect(checkout.getState().step).toBe("terminal");
   });
 
-  it("charges total_to_pay when the customer bears the fee", async () => {
+  it("keeps amount as amount when the customer bears the fee and shows what they pay", async () => {
     const mock = new MockFetch();
     queueLoad(mock, { fee_bearer: "CUSTOMER" }, "10.50");
     mock.enqueue(200, { entity: "MTN_CD" });
@@ -142,9 +142,49 @@ describe("checkout form flow", () => {
     await checkout.loadCountries();
     await checkout.selectCountry("CD");
     checkout.setIdentifier("812345678");
+    expect(checkout.getState().fees?.total_to_pay).toBe("10.50");
     await checkout.pay();
-    expect(depositBody(mock).amount).toBe("10.50");
-    expect(depositBody(mock)).not.toHaveProperty("customer_email");
+    const body = depositBody(mock);
+    expect(body.amount).toBe("10.00");
+    expect(body).not.toHaveProperty("fees");
+    expect(body).not.toHaveProperty("customer_email");
+  });
+
+  it("sends the merchant fee as fees, in the simulation and in the deposit", async () => {
+    const mock = new MockFetch();
+    queueLoad(mock, {});
+    mock.enqueue(200, { entity: "MTN_CD" });
+    queueQuote(mock, "10.50");
+    mock.enqueue(200, { status: "SUCCESS" });
+    const checkout = createCheckout(sessionWith(mock), { ...FORM_OPTIONS, fees: "1.00" });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    checkout.setIdentifier("812345678");
+    await checkout.pay();
+    const simulate = mock.calls.find((call) => call.url.endsWith("/fees/simulate"));
+    expect(JSON.parse(simulate?.body ?? "{}").fees).toBe("1.00");
+    const body = depositBody(mock);
+    expect(body.amount).toBe("10.00");
+    expect(body.fees).toBe("1.00");
+  });
+
+  it("never sends fees on a payout", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, COUNTRIES);
+    mock.enqueue(200, {});
+    mock.enqueue(200, [PROVIDER]);
+    queueQuote(mock, "10.00");
+    mock.enqueue(200, { status: "SUCCESS" });
+    const checkout = createCheckout(sessionWith(mock), { ...FORM_OPTIONS, operation: "payout", fees: "1.00" });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    checkout.setIdentifier("812345678");
+    await checkout.goOverview();
+    await checkout.confirm();
+    const payout = mock.calls.find((call) => call.method === "POST" && call.url.endsWith("/payouts"));
+    expect(JSON.parse(payout?.body ?? "{}")).not.toHaveProperty("fees");
+    const simulate = mock.calls.find((call) => call.url.endsWith("/fees/simulate"));
+    expect(JSON.parse(simulate?.body ?? "{}")).not.toHaveProperty("fees");
   });
 
   it("returns to the form with the error when the deposit fails", async () => {

@@ -60,7 +60,7 @@ describe("createCheckout", () => {
     expect(checkout.getState().customerName).toBeNull();
   });
 
-  it("adds a partner fee to the deposit amount", async () => {
+  it("sends the partner fee as fees and keeps amount as amount", async () => {
     const mock = new MockFetch();
     mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);
     mock.enqueue(404, {});
@@ -90,7 +90,9 @@ describe("createCheckout", () => {
     await checkout.confirm();
     const createCall = mock.calls.find((call) => call.url.includes("/deposits") && call.method === "POST");
     expect(createCall).toBeDefined();
-    expect(JSON.parse(createCall?.body ?? "{}").amount).toBe("105.00");
+    const body = JSON.parse(createCall?.body ?? "{}");
+    expect(body.amount).toBe("100.00");
+    expect(body.fees).toBe("5.00");
   });
 
   it("blocks payout confirm when balance validation fails", async () => {
