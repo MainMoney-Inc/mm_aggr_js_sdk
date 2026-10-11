@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Angular checkout wizard for the MainMoney JS/TS frontend SDK",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "author": "MainMoney SARL",
   "homepage": "https://github.com/MainMoney-Inc/mm_aggr_js_sdk",
   "repository": {

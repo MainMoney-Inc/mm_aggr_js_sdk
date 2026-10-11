@@ -1,11 +1,10 @@
 ---
-description: PolyForm Noncommercial license and CLA for MainMoney SARL
+description: MIT license and CLA for MainMoney SARL
 alwaysApply: true
 ---
 
 # License
 
-- Copyright (c) MainMoney SARL. Outbound license: PolyForm Noncommercial 1.0.0.
-- Commercial use requires written permission from MainMoney SARL.
+- Copyright (c) MainMoney SARL. Outbound license: MIT.
 - Pull requests require `CLA.md` so contributions vest in MainMoney SARL.
-- Do not relicense as MIT, Apache-2.0, or GPL.
+- Keep the license headers and manifest SPDX ids consistent with `LICENSE`.

@@ -118,9 +118,7 @@ import { CheckoutWizard } from "@mainmoney/js-react";
 
 ## License
 
-Copyright (c) 2026 MainMoney SARL. Licensed under the PolyForm Noncommercial
-License 1.0.0. Non-commercial use is allowed. Commercial use requires
-permission from MainMoney SARL. See [LICENSE](LICENSE).
+Copyright (c) 2026 MainMoney SARL. Licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Examples
 

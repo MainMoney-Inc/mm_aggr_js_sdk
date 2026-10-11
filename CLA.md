@@ -18,7 +18,7 @@ attachment) to this repository, you agree that:
    knowingly infringe third-party rights.
 4. You retain the right to be identified as the author of the contribution.
 
-MainMoney SARL may use contributions in proprietary products and in packages
-licensed under PolyForm Noncommercial License 1.0.0.
+MainMoney SARL may use contributions in proprietary products and distributes this
+repository under the MIT License.
 
 This is not legal advice. Individual and entity contributors are both covered.
