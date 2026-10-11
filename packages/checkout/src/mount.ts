@@ -1,6 +1,6 @@
 /** Vanilla DOM mount for the checkout wizard. */
 
-import { applyTheme, isPhoneIdentifier } from "@mainmoney/js-core";
+import { applyTheme, isPhoneIdentifier } from "@mainmoneyapp/js-core";
 
 import { DEFAULT_LOGO_URL } from "./assets/logo.js";
 import type { Checkout, CheckoutSnapshot } from "./checkout.js";

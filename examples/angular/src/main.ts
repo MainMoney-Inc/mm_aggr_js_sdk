@@ -1,5 +1,5 @@
 import "zone.js";
-import "@mainmoney/js-checkout/styles.css";
+import "@mainmoneyapp/js-checkout/styles.css";
 import { bootstrapApplication } from "@angular/platform-browser";
 import { provideRouter, withHashLocation } from "@angular/router";
 

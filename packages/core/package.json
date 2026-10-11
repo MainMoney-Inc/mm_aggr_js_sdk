@@ -1,6 +1,6 @@
 {
-  "name": "@mainmoney/js-core",
-  "version": "0.1.0",
+  "name": "@mainmoneyapp/js-core",
+  "version": "0.1.1",
   "description": "Framework-agnostic core for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "MIT",

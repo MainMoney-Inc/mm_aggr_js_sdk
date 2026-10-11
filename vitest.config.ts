@@ -8,9 +8,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@mainmoney/js-core": path.resolve("packages/core/src/index.ts"),
-      "@mainmoney/js-http": path.resolve("packages/http/src/index.ts"),
-      "@mainmoney/js-checkout": path.resolve("packages/checkout/src/index.ts"),
+      "@mainmoneyapp/js-core": path.resolve("packages/core/src/index.ts"),
+      "@mainmoneyapp/js-http": path.resolve("packages/http/src/index.ts"),
+      "@mainmoneyapp/js-checkout": path.resolve("packages/checkout/src/index.ts"),
     },
   },
 });

@@ -1,6 +1,6 @@
 {
-  "name": "@mainmoney/js-http",
-  "version": "0.1.0",
+  "name": "@mainmoneyapp/js-http",
+  "version": "0.1.1",
   "description": "Merchant-backend HTTP client for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@mainmoney/js-core": "0.1.0"
+    "@mainmoneyapp/js-core": "0.1.1"
   }
 }

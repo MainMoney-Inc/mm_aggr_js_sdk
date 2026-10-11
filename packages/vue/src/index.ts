@@ -1,7 +1,7 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from "vue";
 
-import type { Checkout } from "@mainmoney/js-checkout";
-import { mountCheckout } from "@mainmoney/js-checkout";
+import type { Checkout } from "@mainmoneyapp/js-checkout";
+import { mountCheckout } from "@mainmoneyapp/js-checkout";
 
 export const CheckoutWizard = defineComponent({
   name: "MainMoneyCheckoutWizard",

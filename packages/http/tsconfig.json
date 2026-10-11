@@ -9,7 +9,7 @@
     "lib": ["ES2022", "DOM"],
     "skipLibCheck": true,
     "paths": {
-      "@mainmoney/js-core": ["../core/src/index.ts"]
+      "@mainmoneyapp/js-core": ["../core/src/index.ts"]
     }
   },
   "include": ["src"]

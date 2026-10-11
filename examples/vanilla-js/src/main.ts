@@ -1,6 +1,6 @@
-import { createSession } from "@mainmoney/js-core";
-import { createCheckout, mountCheckout } from "@mainmoney/js-checkout";
-import "@mainmoney/js-checkout/styles.css";
+import { createSession } from "@mainmoneyapp/js-core";
+import { createCheckout, mountCheckout } from "@mainmoneyapp/js-checkout";
+import "@mainmoneyapp/js-checkout/styles.css";
 
 import {
   backendUrl,

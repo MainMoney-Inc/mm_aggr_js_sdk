@@ -23,15 +23,16 @@ npm test
 npm run build
 ```
 
-`@mainmoney/js-angular` is built with ng-packagr (Ivy partial compilation). Do not bundle that package with tsup.
+`@mainmoneyapp/js-angular` is built with ng-packagr (Ivy partial compilation). Do not bundle that package with tsup.
 
 ## npm
 
-Packages: `@mainmoney/js-core`, `@mainmoney/js-http`, `@mainmoney/js-checkout`,
-`@mainmoney/js-react`, `@mainmoney/js-vue`, `@mainmoney/js-angular`. First
-publish is a one-time project create on npm. After that, release from each
-package directory with `npm publish --access public`. Release by pushing an
-annotated tag (`v0.1.0`, then semver). Do not commit npm tokens.
+Packages: `@mainmoneyapp/js-core`, `@mainmoneyapp/js-http`, `@mainmoneyapp/js-checkout`,
+`@mainmoneyapp/js-react`, `@mainmoneyapp/js-vue`, `@mainmoneyapp/js-angular`. Releases are
+automated: bump `version` in every `packages/*/package.json` (and the pinned
+`@mainmoneyapp/*` dependencies), update `CHANGELOG.md`, then push an annotated tag
+`vX.Y.Z`. The `Publish` workflow publishes all packages to npm with provenance using
+the `NPM_TOKEN` organisation secret. Never commit npm tokens.
 
 ## Branches and commits
 

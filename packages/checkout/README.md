@@ -1,7 +1,7 @@
-# @mainmoney/js-checkout
+# @mainmoneyapp/js-checkout
 
 Headless checkout and vanilla `mountCheckout`. Import
-`@mainmoney/js-checkout/styles.css`. See the [root README](../../README.md).
+`@mainmoneyapp/js-checkout/styles.css`. See the [root README](../../README.md).
 
 ## Layouts
 

@@ -4,7 +4,7 @@ import {
   MerchantBackendException,
   joinUrl,
   type Session,
-} from "@mainmoney/js-core";
+} from "@mainmoneyapp/js-core";
 
 import { FetchHttpClient } from "./fetch-client.js";
 import type { HttpClient, QueryValue, RequestOptions } from "./http-client.js";

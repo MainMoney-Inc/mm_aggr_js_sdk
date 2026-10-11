@@ -21,8 +21,8 @@ import {
   type Provider,
   type Session,
   type StatusPayload,
-} from "@mainmoney/js-core";
-import { createHttp, type MerchantHttp } from "@mainmoney/js-http";
+} from "@mainmoneyapp/js-core";
+import { createHttp, type MerchantHttp } from "@mainmoneyapp/js-http";
 
 import { pollStatus } from "./poll.js";
 

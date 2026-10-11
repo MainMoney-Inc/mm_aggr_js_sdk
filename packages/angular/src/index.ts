@@ -11,11 +11,11 @@ import {
   ViewChild,
 } from "@angular/core";
 
-import type { Checkout } from "@mainmoney/js-checkout";
-import { mountCheckout } from "@mainmoney/js-checkout";
+import type { Checkout } from "@mainmoneyapp/js-checkout";
+import { mountCheckout } from "@mainmoneyapp/js-checkout";
 
 /**
- * Checkout wizard. Import `@mainmoney/js-checkout/styles.css` once in your app
+ * Checkout wizard. Import `@mainmoneyapp/js-checkout/styles.css` once in your app
  * (`angular.json` -> `styles`, or `src/main.ts`).
  *
  * The DOM mount only runs in the browser, so the component is safe under SSR.

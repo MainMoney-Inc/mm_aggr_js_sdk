@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { createCheckout } from "@mainmoney/js-checkout";
-import { createSession } from "@mainmoney/js-core";
-import { CheckoutWizard } from "@mainmoney/js-vue";
-import "@mainmoney/js-checkout/styles.css";
-import type { Checkout } from "@mainmoney/js-checkout";
+import { createCheckout } from "@mainmoneyapp/js-checkout";
+import { createSession } from "@mainmoneyapp/js-core";
+import { CheckoutWizard } from "@mainmoneyapp/js-vue";
+import "@mainmoneyapp/js-checkout/styles.css";
+import type { Checkout } from "@mainmoneyapp/js-checkout";
 import { onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 

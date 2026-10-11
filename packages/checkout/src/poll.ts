@@ -1,7 +1,7 @@
 /** Poll a partner status URL with injected headers only. */
 
-import { ConfigurationException, isTerminalStatus, type StatusPayload } from "@mainmoney/js-core";
-import { decodeJson } from "@mainmoney/js-http";
+import { ConfigurationException, isTerminalStatus, type StatusPayload } from "@mainmoneyapp/js-core";
+import { decodeJson } from "@mainmoneyapp/js-http";
 
 export type PollOptions = {
   pollUrl: string;

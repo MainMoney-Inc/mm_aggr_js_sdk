@@ -1,6 +1,6 @@
 # Angular mini-shop
 
-Uses `@mainmoney/js-angular`. Talks to a backend example over HTTP only.
+Uses `@mainmoneyapp/js-angular`. Talks to a backend example over HTTP only.
 
 Default port: **4200**.
 

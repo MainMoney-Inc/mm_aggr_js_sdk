@@ -1,9 +1,9 @@
 import { NgFor, NgIf } from "@angular/common";
 import { Component, OnInit } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { CheckoutWizardComponent } from "@mainmoney/js-angular";
-import { createCheckout, type Checkout } from "@mainmoney/js-checkout";
-import { createSession } from "@mainmoney/js-core";
+import { CheckoutWizardComponent } from "@mainmoneyapp/js-angular";
+import { createCheckout, type Checkout } from "@mainmoneyapp/js-checkout";
+import { createSession } from "@mainmoneyapp/js-core";
 
 import { createPayoutSession, listTransfers, type Transfer } from "./api";
 

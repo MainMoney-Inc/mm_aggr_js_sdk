@@ -21,14 +21,14 @@ browser.
 ## Install
 
 ```bash
-npm install @mainmoney/js-core @mainmoney/js-http @mainmoney/js-checkout
+npm install @mainmoneyapp/js-core @mainmoneyapp/js-http @mainmoneyapp/js-checkout
 ```
 
 Framework wrappers (optional, same styles):
 
 ```bash
-npm install @mainmoney/js-react
-# or @mainmoney/js-vue / @mainmoney/js-angular
+npm install @mainmoneyapp/js-react
+# or @mainmoneyapp/js-vue / @mainmoneyapp/js-angular
 ```
 
 Until the packages are on npm, install from GitHub:
@@ -40,14 +40,14 @@ npm install github:MainMoney-Inc/mm_aggr_js_sdk
 Import the shared stylesheet:
 
 ```ts
-import "@mainmoney/js-checkout/styles.css";
+import "@mainmoneyapp/js-checkout/styles.css";
 ```
 
 ## Quick start
 
 ```ts
-import { createSession } from "@mainmoney/js-core";
-import { createCheckout, mountCheckout } from "@mainmoney/js-checkout";
+import { createSession } from "@mainmoneyapp/js-core";
+import { createCheckout, mountCheckout } from "@mainmoneyapp/js-checkout";
 
 const session = createSession({
   merchantBackendUrl: "https://your-app.example/payments",
@@ -104,7 +104,7 @@ Copy is English and French (`locale: "en" | "fr"`), overridable via `messages`.
 ### React / Vue / Angular
 
 ```tsx
-import { CheckoutWizard } from "@mainmoney/js-react";
+import { CheckoutWizard } from "@mainmoneyapp/js-react";
 <CheckoutWizard checkout={checkout} />
 ```
 

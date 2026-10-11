@@ -1,4 +1,4 @@
-# @mainmoney/js-angular
+# @mainmoneyapp/js-angular
 
 Angular standalone `CheckoutWizardComponent` (`<mm-checkout-wizard>`).
 Peer dependencies: `@angular/core` and `@angular/common` >= 17.
@@ -20,18 +20,18 @@ npm pack ./packages/angular/dist ./packages/checkout ./packages/core ./packages/
 # then in your Angular app: npm install ./mainmoney-js-*.tgz
 ```
 
-or, for local development, `"@mainmoney/js-angular": "file:<path>/packages/angular/dist"`.
+or, for local development, `"@mainmoneyapp/js-angular": "file:<path>/packages/angular/dist"`.
 
 ## Usage
 
 Import the stylesheet once, in `angular.json` -> `styles` or `src/main.ts`:
 
 ```ts
-import "@mainmoney/js-checkout/styles.css";
+import "@mainmoneyapp/js-checkout/styles.css";
 ```
 
 ```ts
-import { CheckoutWizardComponent } from "@mainmoney/js-angular";
+import { CheckoutWizardComponent } from "@mainmoneyapp/js-angular";
 
 @Component({
   standalone: true,

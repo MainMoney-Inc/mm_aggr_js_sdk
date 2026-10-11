@@ -1,7 +1,7 @@
 import { createElement, useEffect, useRef } from "react";
 
-import type { Checkout } from "@mainmoney/js-checkout";
-import { mountCheckout } from "@mainmoney/js-checkout";
+import type { Checkout } from "@mainmoneyapp/js-checkout";
+import { mountCheckout } from "@mainmoneyapp/js-checkout";
 
 export type CheckoutWizardProps = {
   checkout: Checkout;

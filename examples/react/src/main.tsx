@@ -1,11 +1,11 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter, Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
-import { createSession } from "@mainmoney/js-core";
-import { createCheckout } from "@mainmoney/js-checkout";
-import { CheckoutWizard } from "@mainmoney/js-react";
-import "@mainmoney/js-checkout/styles.css";
-import type { Checkout } from "@mainmoney/js-checkout";
+import { createSession } from "@mainmoneyapp/js-core";
+import { createCheckout } from "@mainmoneyapp/js-checkout";
+import { CheckoutWizard } from "@mainmoneyapp/js-react";
+import "@mainmoneyapp/js-checkout/styles.css";
+import type { Checkout } from "@mainmoneyapp/js-checkout";
 
 import {
   backendUrl,

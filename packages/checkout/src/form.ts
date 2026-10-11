@@ -1,6 +1,6 @@
 /** Single-form checkout layout: tabs, phone with dial code, fee box, provider logos, Pay button. */
 
-import type { CheckoutLocale, Country, PaymentMethod, Provider } from "@mainmoney/js-core";
+import type { CheckoutLocale, Country, PaymentMethod, Provider } from "@mainmoneyapp/js-core";
 
 import type { Checkout, CheckoutSnapshot } from "./checkout.js";
 

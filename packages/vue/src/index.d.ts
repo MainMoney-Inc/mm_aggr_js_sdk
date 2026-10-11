@@ -1,4 +1,4 @@
-import type { Checkout } from "@mainmoney/js-checkout";
+import type { Checkout } from "@mainmoneyapp/js-checkout";
 
 export declare const CheckoutWizard: {
   new (): unknown;

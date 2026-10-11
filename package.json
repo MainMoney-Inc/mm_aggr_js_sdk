@@ -1,6 +1,6 @@
 {
-  "name": "@mainmoney/js",
-  "version": "0.1.0",
+  "name": "@mainmoneyapp/js",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -8,9 +8,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @mainmoney/js-core -w @mainmoney/js-http && npm run build -w @mainmoney/js-checkout && npm run build -w @mainmoney/js-react -w @mainmoney/js-vue -w @mainmoney/js-angular --if-present",
+    "build": "npm run build -w @mainmoneyapp/js-core -w @mainmoneyapp/js-http && npm run build -w @mainmoneyapp/js-checkout && npm run build -w @mainmoneyapp/js-react -w @mainmoneyapp/js-vue -w @mainmoneyapp/js-angular --if-present",
     "test": "vitest run",
-    "typecheck": "npm run typecheck -w @mainmoney/js-core -w @mainmoney/js-http -w @mainmoney/js-checkout"
+    "typecheck": "npm run typecheck -w @mainmoneyapp/js-core -w @mainmoneyapp/js-http -w @mainmoneyapp/js-checkout"
   },
   "devDependencies": {
     "typescript": "^5.9.0",

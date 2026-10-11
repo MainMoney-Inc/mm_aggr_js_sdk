@@ -4,5 +4,5 @@
   "lib": {
     "entryFile": "src/index.ts"
   },
-  "allowedNonPeerDependencies": ["@mainmoney/js-checkout"]
+  "allowedNonPeerDependencies": ["@mainmoneyapp/js-checkout"]
 }

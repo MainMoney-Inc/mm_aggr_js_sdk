@@ -1,6 +1,6 @@
 # Vue mini-shop
 
-Uses `@mainmoney/js-vue`. Talks to a backend example over HTTP only.
+Uses `@mainmoneyapp/js-vue`. Talks to a backend example over HTTP only.
 
 Default port: **5175**.
 

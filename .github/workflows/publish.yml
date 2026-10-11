@@ -1,0 +1,40 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Tag matches package versions
+        run: |
+          for p in packages/*/package.json; do
+            test "v$(node -p "require('./$p').version")" = "${GITHUB_REF_NAME}" || { echo "$p version != ${GITHUB_REF_NAME}"; exit 1; }
+          done
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Dependency order: core and http first, then checkout, then the framework wrappers.
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for w in js-core js-http js-checkout js-react js-vue; do
+            npm publish -w "@mainmoneyapp/$w" --access public --provenance
+          done
+          # ng-packagr emits the publishable package (with its own package.json) in dist/.
+          npm publish packages/angular/dist --access public --provenance

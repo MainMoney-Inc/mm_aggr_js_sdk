@@ -1,9 +1,9 @@
 import { NgIf } from "@angular/common";
 import { Component, OnInit } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
-import { CheckoutWizardComponent } from "@mainmoney/js-angular";
-import { createCheckout, type Checkout } from "@mainmoney/js-checkout";
-import { createSession } from "@mainmoney/js-core";
+import { CheckoutWizardComponent } from "@mainmoneyapp/js-angular";
+import { createCheckout, type Checkout } from "@mainmoneyapp/js-checkout";
+import { createSession } from "@mainmoneyapp/js-core";
 
 import { createPaySession } from "./api";
 
