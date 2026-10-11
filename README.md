@@ -1,5 +1,7 @@
 # MainMoney JS/TS frontend SDK
 
+[![npm](https://img.shields.io/npm/v/@mainmoneyapp/js-core)](https://www.npmjs.com/org/mainmoneyapp) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Browser TypeScript modules for a branded checkout wizard. Use this package from
 **Angular, React, Next.js, Vue, or vanilla TypeScript/JavaScript**.
 
@@ -29,12 +31,6 @@ Framework wrappers (optional, same styles):
 ```bash
 npm install @mainmoneyapp/js-react
 # or @mainmoneyapp/js-vue / @mainmoneyapp/js-angular
-```
-
-Until the packages are on npm, install from GitHub:
-
-```bash
-npm install github:MainMoney-Inc/mm_aggr_js_sdk
 ```
 
 Import the shared stylesheet:
