@@ -1,6 +1,6 @@
 {
   "name": "@mainmoneyapp/js-http",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Merchant-backend HTTP client for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "MIT",
@@ -14,7 +14,11 @@
   "bugs": {
     "url": "https://github.com/MainMoney-Inc/mm_aggr_js_sdk/issues"
   },
-  "keywords": ["mainmoney", "checkout", "http"],
+  "keywords": [
+    "mainmoney",
+    "checkout",
+    "http"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -23,7 +27,11 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "LICENSE", "README.md"],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },

@@ -1,6 +1,6 @@
 {
   "name": "@mainmoneyapp/js-react",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "React checkout wizard for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "MIT",
