@@ -243,6 +243,44 @@ describe("createCheckout", () => {
     expect(checkout.getState().status?.status).toBe("SUCCESS");
   });
 
+  it("flags slow after slowNoticeAfterMs but keeps polling until a terminal status", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [
+      { code: "MPESA_KE", name: "M-Pesa", entity_type: "MOBILE_MONEY", country_code: "KE", currency_code: "KES" },
+    ]);
+    mock.enqueue(200, []);
+    mock.enqueue(200, { total_merchant_fee: "0", net_amount: "10.00", currency: "KES" });
+    mock.enqueue(200, { status: "PENDING" });
+    for (let i = 0; i < 40; i += 1) {
+      mock.enqueue(200, { status: "PENDING" });
+    }
+    mock.enqueue(200, { status: "SUCCESS", merchant_reference: "ORDER-4" });
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: true,
+      pollUrl: "https://partner.example/status",
+      pollHeaders: {},
+      pollIntervalMs: 5,
+      slowNoticeAfterMs: 50,
+      reference: "ORDER-4",
+    });
+    const slowSeen: boolean[] = [];
+    checkout.subscribe((state) => slowSeen.push(state.slow));
+    await checkout.loadCountries();
+    await checkout.selectCountry("KE");
+    await checkout.selectProvider("MPESA_KE");
+    checkout.setIdentifier("0712345678");
+    await checkout.setAmount("10.00");
+    await checkout.goOverview();
+    await checkout.confirm();
+    expect(slowSeen).toContain(true);
+    expect(checkout.getState().step).toBe("terminal");
+    expect(checkout.getState().status?.status).toBe("SUCCESS");
+    expect(checkout.getState().slow).toBe(false);
+  });
+
   it("does not call match-provider on identifier keystrokes", async () => {
     const mock = new MockFetch();
     mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);

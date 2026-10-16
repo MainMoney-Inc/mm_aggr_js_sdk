@@ -157,6 +157,12 @@
   padding: 2rem 0;
 }
 
+.mm-confirm-slow {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
 .mm-spinner {
   position: relative;
   width: 4rem;

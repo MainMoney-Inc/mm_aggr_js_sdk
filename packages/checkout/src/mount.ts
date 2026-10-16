@@ -156,6 +156,12 @@ function confirmingStep(checkout: Checkout, state: CheckoutSnapshot, logoUrl: st
   const caption = document.createElement("div");
   caption.textContent = state.step === "polling" ? checkout.t("polling") : checkout.t("confirming");
   wrap.append(spinner, caption);
+  if (state.step === "polling" && state.slow) {
+    const notice = document.createElement("div");
+    notice.className = "mm-confirm-slow";
+    notice.textContent = checkout.t("slow");
+    wrap.append(notice);
+  }
   return wrap;
 }
 

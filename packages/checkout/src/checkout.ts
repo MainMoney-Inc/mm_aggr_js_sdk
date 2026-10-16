@@ -45,7 +45,10 @@ export type CreateCheckoutOptions = {
   lockAmount?: boolean;
   currency?: string;
   lockCurrency?: boolean;
+  /** Polling interval; defaults to 1000 ms. */
   pollIntervalMs?: number;
+  /** After this long without a terminal status the widget flags `slow` (default 30000 ms) but keeps polling. */
+  slowNoticeAfterMs?: number;
   onPartnerFee?: (ctx: CheckoutSnapshot) => Promise<PartnerFee | null>;
   onValidateBalance?: (ctx: CheckoutSnapshot) => Promise<BalanceCheck>;
   http?: MerchantHttp;
@@ -80,6 +83,8 @@ export type CheckoutSnapshot = {
   canPay: boolean;
   error?: string;
   status?: StatusPayload;
+  /** True once polling has run longer than `slowNoticeAfterMs` without a terminal status. */
+  slow: boolean;
   theme: CheckoutTheme;
 };
 
@@ -185,6 +190,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     feeBearer: "MERCHANT",
     customerEmail: "",
     canPay: false,
+    slow: false,
     theme,
   };
 
@@ -603,16 +609,28 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         return;
       }
       state.step = "polling";
+      state.slow = false;
       notify();
-      const status = await pollStatus({
-        pollUrl: options.pollUrl ?? "",
-        pollHeaders: options.pollHeaders ?? {},
-        fetchImpl: session.fetch,
-        reference,
-        operation: state.operation,
-        intervalMs: options.pollIntervalMs ?? 2000,
-        signal: pollAbort.signal,
-      });
+      const slowTimer = setTimeout(() => {
+        state.slow = true;
+        notify();
+      }, options.slowNoticeAfterMs ?? 30_000);
+      pollAbort.signal.addEventListener("abort", () => clearTimeout(slowTimer), { once: true });
+      let status: StatusPayload;
+      try {
+        status = await pollStatus({
+          pollUrl: options.pollUrl ?? "",
+          pollHeaders: options.pollHeaders ?? {},
+          fetchImpl: session.fetch,
+          reference,
+          operation: state.operation,
+          intervalMs: options.pollIntervalMs ?? 1000,
+          signal: pollAbort.signal,
+        });
+      } finally {
+        clearTimeout(slowTimer);
+      }
+      state.slow = false;
       state.status = status;
       state.step = "terminal";
       notify();
