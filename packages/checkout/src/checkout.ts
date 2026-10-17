@@ -4,6 +4,7 @@ import {
   ConfigurationException,
   CurrencyMismatchException,
   Emitter,
+  MerchantBackendException,
   createTranslator,
   extractCustomerName,
   isPhoneIdentifier,
@@ -26,7 +27,7 @@ import { createHttp, type MerchantHttp } from "@mainmoneyapp/js-http";
 
 import { pollStatus } from "./poll.js";
 
-export type CheckoutStep = "country" | "details" | "overview" | "confirming" | "polling" | "ongoing" | "terminal";
+export type CheckoutStep = "country" | "details" | "overview" | "confirming" | "polling" | "ongoing" | "terminal" | "error";
 
 export type BalanceCheck = { ok: boolean; message?: string };
 
@@ -43,8 +44,21 @@ export type CreateCheckoutOptions = {
   /** Merchant fee added on top of `amount` (deposits; the merchant must be allowed to add fees). */
   fees?: string;
   lockAmount?: boolean;
+  /**
+   * Currency of `amount` (the cart/order currency). When set it never changes: a provider that accepts
+   * other currencies only changes the currency the customer pays in (`payCurrency`), through a quote.
+   */
   currency?: string;
+  /** Forbid choosing another pay currency; the customer always pays in `currency`. */
   lockCurrency?: boolean;
+  /** Pre-fills the optional receipt address; the customer can still change it. */
+  customerEmail?: string;
+  /**
+   * Called when the customer presses Retry after a failed payment. Hosts that bind a payment to a server
+   * session (cart plugins) start a new session here. Without it the widget retries in place with a new
+   * reference and Idempotency-Key suffix.
+   */
+  onRetry?: () => void | Promise<void>;
   /** Polling interval; defaults to 1000 ms. */
   pollIntervalMs?: number;
   /** After this long without a terminal status the widget flags `slow` (default 30000 ms) but keeps polling. */
@@ -66,9 +80,17 @@ export type CheckoutSnapshot = {
   customerName: string | null;
   amount: string;
   lockAmount: boolean;
+  /** Currency of `amount` (cart currency). */
   currency: string;
   lockCurrency: boolean;
+  /** True when the host fixed the amount currency (cart currency); only `payCurrency` can change then. */
+  currencyFixed: boolean;
+  /** Currency the customer pays in; differs from `currency` only when a quote converts between them. */
+  payCurrency: string;
+  /** Currencies the selected provider accepts (what `payCurrency` can be). */
   availableCurrencies: string[];
+  /** True when the backend has no conversion between `currency` and `payCurrency`. */
+  quoteUnavailable: boolean;
   limits?: AmountLimit;
   fees?: FeeSimulation;
   partnerFee: PartnerFee | null;
@@ -85,6 +107,10 @@ export type CheckoutSnapshot = {
   status?: StatusPayload;
   /** True once polling has run longer than `slowNoticeAfterMs` without a terminal status. */
   slow: boolean;
+  /** True while status polling cannot reach the server; polling keeps retrying until it can. */
+  connectionLost: boolean;
+  /** True once the first status poll succeeded, i.e. the status endpoint is reachable. */
+  pollConfirmed: boolean;
   theme: CheckoutTheme;
 };
 
@@ -101,6 +127,8 @@ export type Checkout = {
   setLocale(locale: CheckoutLocale): void;
   matchProvider(): Promise<void>;
   setCurrency(code: string): Promise<void>;
+  /** After an error: start over (new session via `onRetry`, or a new attempt in place). */
+  retry(): Promise<void>;
   setAmount(amount: string): Promise<void>;
   goOverview(): Promise<void>;
   goBack(): void;
@@ -168,8 +196,9 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   const theme = { ...session.theme, ...options.theme };
   const emitter = new Emitter();
   const pollAbort = new AbortController();
-  const explicitCurrency = options.currency?.trim() ?? "";
-  const lockCurrency = options.lockCurrency === true || explicitCurrency !== "";
+  const explicitCurrency = options.currency?.trim().toUpperCase() ?? "";
+  const fixedCurrency = explicitCurrency !== "";
+  const lockCurrency = options.lockCurrency === true;
 
   const state: CheckoutSnapshot = {
     step: "country",
@@ -182,19 +211,39 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     lockAmount: options.lockAmount === true,
     currency: explicitCurrency,
     lockCurrency,
-    availableCurrencies: explicitCurrency !== "" ? [explicitCurrency] : [],
+    currencyFixed: fixedCurrency,
+    payCurrency: explicitCurrency,
+    availableCurrencies: fixedCurrency ? [explicitCurrency] : [],
+    quoteUnavailable: false,
     partnerFee: null,
     locale: options.locale ?? session.locale,
     paymentMethods: ["mobile_money"],
     activeMethod: "mobile_money",
     feeBearer: "MERCHANT",
-    customerEmail: "",
+    customerEmail: options.customerEmail?.trim() ?? "",
     canPay: false,
     slow: false,
+    connectionLost: false,
+    pollConfirmed: false,
     theme,
   };
 
   let lastMatchedIdentifier = "";
+  /** Deposits/payouts submitted so far: every submission after the first needs its own reference and key. */
+  let submissions = 0;
+  let baseReference: string | undefined;
+  const providerCache = new Map<string, Promise<unknown>>();
+  /** Providers rarely change: reuse the list when the customer flips between countries. */
+  const cachedProviders = (country: string): Promise<unknown> => {
+    const key = `${country}:${routingOperationType()}`;
+    let pending = providerCache.get(key);
+    if (pending === undefined) {
+      pending = http.get<unknown>(session.paths.providers, { country, operation_type: routingOperationType() });
+      providerCache.set(key, pending);
+      pending.catch(() => providerCache.delete(key));
+    }
+    return pending;
+  };
   let returnStep: CheckoutStep = "overview";
 
   const notify = (): void => {
@@ -219,6 +268,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       state.selectedCountry !== undefined &&
       state.providers.length > 0 &&
       state.currency !== "" &&
+      !state.quoteUnavailable &&
       Number.isFinite(amount) &&
       amount > 0 &&
       hasValidLocalNumber()
@@ -251,17 +301,43 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     return [];
   };
 
+  /** Pay in the cart currency when the provider takes it; otherwise the first accepted one (the quote converts). */
+  const defaultPayCurrency = (accepted: string[]): string => {
+    if (accepted.length === 0 || accepted.includes(state.currency)) {
+      return state.currency;
+    }
+    return accepted[0];
+  };
+
   const applyProviderCurrency = (provider: Provider): void => {
     if (state.lockCurrency) {
       return;
     }
     const accepted = providerAcceptedCurrencies(provider);
     state.availableCurrencies = accepted;
+    state.quoteUnavailable = false;
+    if (fixedCurrency) {
+      // The amount is in the cart currency and stays there: only the pay currency follows the provider.
+      state.payCurrency = defaultPayCurrency(accepted);
+      return;
+    }
     if (accepted.includes(provider.currency_code)) {
       state.currency = provider.currency_code;
     } else if (accepted.length > 0) {
       state.currency = accepted[0];
     }
+    state.payCurrency = state.currency;
+  };
+
+  /** True when the backend refused a conversion because it has no rate between the two currencies. */
+  const isNoQuote = (error: unknown): boolean => {
+    if (!(error instanceof MerchantBackendException)) {
+      return false;
+    }
+    if (error.errors.payment_currency !== undefined) {
+      return true;
+    }
+    return JSON.stringify(error.responseBody ?? "").includes("no_quote");
   };
 
   const PAYMENT_METHODS: PaymentMethod[] = ["mobile_money", "card", "mainmoney"];
@@ -279,17 +355,35 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     }
   };
 
+  /** The backend list is already restricted to the merchant's allowed countries; never show anything else. */
+  const allowedCountries = (countries: Country[]): Country[] => {
+    const seen = new Set<string>();
+    return countries.filter((country) => {
+      if (typeof country.code !== "string" || country.code === "" || seen.has(country.code)) {
+        return false;
+      }
+      seen.add(country.code);
+      return true;
+    });
+  };
+
   const loadCountries = async (): Promise<void> => {
+    const countriesRequest = http.get<unknown>(session.paths.countries);
+    // Branding is optional (the merchant may not proxy the endpoint), so its failure never blocks the form.
+    const preferences = http
+      .get<Record<string, unknown>>(session.paths.checkoutPreferences)
+      .catch(() => undefined);
     try {
-      const payload = await http.get<unknown>(session.paths.countries);
-      state.countries = paginated<Country>(payload);
+      const payload = await countriesRequest;
+      state.countries = allowedCountries(paginated<Country>(payload));
       state.error = undefined;
     } catch (error) {
+      void preferences;
       fail(error);
       return;
     }
-    try {
-      const prefs = await http.get<Record<string, unknown>>(session.paths.checkoutPreferences);
+    const prefs = await preferences;
+    if (prefs !== undefined) {
       applyPaymentPreferences(prefs);
       if (prefs.primary_color !== undefined) {
         state.theme = {
@@ -299,8 +393,6 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
           background: String(prefs.background_color ?? state.theme.background),
         };
       }
-    } catch {
-      // Branding is optional; merchant may not proxy the endpoint yet.
     }
     notify();
   };
@@ -312,21 +404,20 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       return;
     }
     try {
-      const payload = await http.get<unknown>(session.paths.providers, {
-        country: code,
-        operation_type: routingOperationType(),
-      });
+      const payload = await cachedProviders(code);
       state.selectedCountry = country;
       state.selectedProvider = undefined;
       state.highlightedProviderCode = undefined;
       state.customerName = null;
       lastMatchedIdentifier = "";
       state.providers = paginated<Provider>(payload);
+      state.quoteUnavailable = false;
       if (!state.lockCurrency) {
         state.availableCurrencies = unionProviderCurrencies(state.providers);
         if (state.currency === "" && state.availableCurrencies.length > 0) {
           state.currency = state.availableCurrencies[0];
         }
+        state.payCurrency = fixedCurrency ? defaultPayCurrency(state.availableCurrencies) : state.currency;
       }
       state.error = undefined;
       state.step = "details";
@@ -426,7 +517,12 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       return;
     }
     try {
-      state.currency = normalized;
+      if (fixedCurrency) {
+        state.payCurrency = normalized;
+      } else {
+        state.currency = normalized;
+        state.payCurrency = normalized;
+      }
       await refreshLimitsAndFees();
       notify();
     } catch (error) {
@@ -447,39 +543,72 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     }
   };
 
-  const refreshLimitsAndFees = async (): Promise<void> => {
-    if (state.selectedProvider === undefined || state.amount.trim() === "" || state.currency === "") {
-      return;
-    }
-    const operation = routingOperationType();
-    const limitsPayload = await http.get<unknown>(session.paths.amountLimits, {
-      financial_entity_code: state.selectedProvider.code,
-      currency: state.currency,
-      operation_type: operation,
-    });
-    const limits = paginated<AmountLimit>(limitsPayload);
-    state.limits = limits[0];
-    if (state.limits !== undefined) {
-      const amount = Number(state.amount);
-      const min = state.limits.amount_min === null ? undefined : Number(state.limits.amount_min);
-      const max = state.limits.amount_max === null ? undefined : Number(state.limits.amount_max);
-      if ((min !== undefined && amount < min) || (max !== undefined && amount > max)) {
-        state.error = t("limits", {
-          min: state.limits.amount_min ?? "",
-          max: state.limits.amount_max ?? "",
-        });
-      } else {
-        state.error = undefined;
-      }
-    }
+  const feeSimulation = async (payCurrency: string): Promise<FeeSimulation> => {
     const fees = merchantFees();
-    state.fees = await http.post<FeeSimulation>(session.paths.feesSimulate, {
-      provider_code: state.selectedProvider.code,
-      operation_type: operation,
+    return http.post<FeeSimulation>(session.paths.feesSimulate, {
+      provider_code: state.selectedProvider?.code ?? "",
+      operation_type: routingOperationType(),
       amount: state.amount,
       currency: state.currency,
+      ...(payCurrency !== state.currency ? { payment_currency: payCurrency } : {}),
       ...(fees !== "" ? { fees } : {}),
     });
+  };
+
+  const loadLimits = async (provider: Provider): Promise<void> => {
+    const payload = await http.get<unknown>(session.paths.amountLimits, {
+      financial_entity_code: provider.code,
+      currency: state.payCurrency !== "" ? state.payCurrency : state.currency,
+      operation_type: routingOperationType(),
+    });
+    state.limits = paginated<AmountLimit>(payload)[0];
+  };
+
+  /** Limits are in the pay currency: compare against the converted amount when a quote converted it. */
+  const limitsError = (simulation: FeeSimulation | undefined): string | undefined => {
+    if (state.limits === undefined) {
+      return undefined;
+    }
+    const amount = Number(simulation?.quote?.converted_amount ?? state.amount);
+    const min = state.limits.amount_min === null ? undefined : Number(state.limits.amount_min);
+    const max = state.limits.amount_max === null ? undefined : Number(state.limits.amount_max);
+    if ((min !== undefined && amount < min) || (max !== undefined && amount > max)) {
+      return t("limits", { min: state.limits.amount_min ?? "", max: state.limits.amount_max ?? "" });
+    }
+    return undefined;
+  };
+
+  const refreshLimitsAndFees = async (): Promise<void> => {
+    const provider = state.selectedProvider;
+    if (provider === undefined || state.amount.trim() === "" || state.currency === "") {
+      return;
+    }
+    const payCurrency = state.payCurrency !== "" ? state.payCurrency : state.currency;
+    state.quoteUnavailable = false;
+    await loadLimits(provider);
+    let notice: string | undefined;
+    let simulation: FeeSimulation;
+    try {
+      simulation = await feeSimulation(payCurrency);
+    } catch (error) {
+      if (!isNoQuote(error) || payCurrency === state.currency) {
+        throw error;
+      }
+      // No rate between the cart currency and the chosen one: fall back to the cart currency when the
+      // provider takes it, and tell the customer why.
+      notice = t("noQuote", { from: payCurrency, to: state.currency });
+      state.fees = undefined;
+      if (!providerAcceptedCurrencies(provider).includes(state.currency)) {
+        state.quoteUnavailable = true;
+        state.error = notice;
+        return;
+      }
+      state.payCurrency = state.currency;
+      await loadLimits(provider);
+      simulation = await feeSimulation(state.currency);
+    }
+    state.fees = simulation;
+    state.error = limitsError(simulation) ?? notice;
   };
 
   /** Validate the form and run merchant hooks. Returns false (with `state.error` set) when blocked. */
@@ -562,7 +691,10 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     state.error = undefined;
     notify();
     try {
-      const reference = options.reference ?? crypto.randomUUID();
+      // Retrying in place needs a new reference too: a failed deposit keeps its reference forever.
+      baseReference ??= options.reference ?? crypto.randomUUID();
+      const reference = submissions === 0 ? baseReference : `${baseReference}-r${submissions}`;
+      submissions += 1;
       let created: StatusPayload;
       if (state.operation === "deposit") {
         const payload: Record<string, unknown> = {
@@ -572,6 +704,9 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
           currency: state.currency,
           customer_phone: e164OrIdentifier(),
         };
+        if (state.payCurrency !== "" && state.payCurrency !== state.currency) {
+          payload.payment_currency = state.payCurrency;
+        }
         if (state.customerName !== null) {
           payload.customer_name = state.customerName;
         }
@@ -610,6 +745,8 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       }
       state.step = "polling";
       state.slow = false;
+      state.connectionLost = false;
+      state.pollConfirmed = false;
       notify();
       const slowTimer = setTimeout(() => {
         state.slow = true;
@@ -626,11 +763,22 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
           operation: state.operation,
           intervalMs: options.pollIntervalMs ?? 1000,
           signal: pollAbort.signal,
+          onConnectionChange: (lost) => {
+            state.connectionLost = lost;
+            notify();
+          },
+          onResponse: () => {
+            if (!state.pollConfirmed) {
+              state.pollConfirmed = true;
+              notify();
+            }
+          },
         });
       } finally {
         clearTimeout(slowTimer);
       }
       state.slow = false;
+      state.connectionLost = false;
       state.status = status;
       state.step = "terminal";
       notify();
@@ -639,9 +787,21 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         emitter.emit("status", status);
       }
     } catch (error) {
-      state.step = returnStep;
+      // With a host-managed session (onRetry) a failed attempt cannot be edited: only Retry is offered.
+      state.step = options.onRetry !== undefined ? "error" : returnStep;
       fail(error);
     }
+  };
+
+  const retry = async (): Promise<void> => {
+    if (options.onRetry !== undefined) {
+      await options.onRetry();
+      return;
+    }
+    state.error = undefined;
+    state.status = undefined;
+    state.step = returnStep;
+    notify();
   };
 
   /** Merchant fee sent as `fees` on deposits: the dynamic partner fee wins over the static option. Never on payouts. */
@@ -677,6 +837,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     setLocale,
     matchProvider,
     setCurrency,
+    retry,
     setAmount,
     goOverview,
     goBack,

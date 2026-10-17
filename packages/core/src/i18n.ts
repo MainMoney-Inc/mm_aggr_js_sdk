@@ -27,7 +27,9 @@ export const EN: MessageCatalog = {
   failed: "Payment failed",
   confirming: "Confirming payment",
   polling: "Waiting for confirmation",
-  slow: "Your payment request has been sent. We are waiting for the provider to confirm success or failure. Please keep this page open.",
+  slow: "Your payment is still being processed. You can safely leave this page: we will notify you as soon as the status changes.",
+  lookingUp: "Checking number",
+  connectionLost: "Connection lost. We keep checking and will resume automatically once you are back online.",
   limits: "Amount must be between {min} and {max}",
   required: "This field is required",
   balanceRejected: "Balance validation failed",
@@ -55,6 +57,11 @@ export const EN: MessageCatalog = {
   cardSoon: "Card payments are coming soon.",
   mainmoneySoon: "Pay by scanning a QR code with the MainMoney app. Coming soon.",
   noProviders: "No mobile money provider is available for this country.",
+  noQuote: "Conversion between {from} and {to} is not available. Please select {to}.",
+  payIn: "Pay in",
+  exchangeRate: "Exchange rate: 1 {from} = {rate} {to}",
+  retry: "Retry",
+  retryHint: "Your payment was not completed. Press Retry to start again.",
 };
 
 export const FR: MessageCatalog = {
@@ -80,7 +87,9 @@ export const FR: MessageCatalog = {
   failed: "Paiement échoué",
   confirming: "Confirmation du paiement",
   polling: "En attente de confirmation",
-  slow: "Votre demande de paiement a été envoyée. Nous attendons la confirmation (succès ou échec) de l'opérateur. Veuillez garder cette page ouverte.",
+  slow: "Votre paiement est toujours en cours de traitement. Vous pouvez quitter cette page sans risque : nous vous informerons dès que le statut change.",
+  lookingUp: "Vérification du numéro",
+  connectionLost: "Connexion perdue. Nous continuons de vérifier et reprendrons automatiquement dès le retour de la connexion.",
   limits: "Le montant doit être compris entre {min} et {max}",
   required: "Ce champ est obligatoire",
   balanceRejected: "Validation du solde échouée",
@@ -108,6 +117,11 @@ export const FR: MessageCatalog = {
   cardSoon: "Le paiement par carte sera bientôt disponible.",
   mainmoneySoon: "Payez en scannant un code QR avec l'application MainMoney. Bientôt disponible.",
   noProviders: "Aucun opérateur mobile money n'est disponible pour ce pays.",
+  noQuote: "La conversion entre {from} et {to} n'est pas disponible. Veuillez sélectionner {to}.",
+  payIn: "Payer en",
+  exchangeRate: "Taux de change : 1 {from} = {rate} {to}",
+  retry: "Réessayer",
+  retryHint: "Votre paiement n'a pas abouti. Appuyez sur Réessayer pour recommencer.",
 };
 
 const CATALOGS: Record<CheckoutLocale, MessageCatalog> = { en: EN, fr: FR };

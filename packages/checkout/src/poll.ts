@@ -11,6 +11,12 @@ export type PollOptions = {
   operation: string;
   intervalMs: number;
   signal?: AbortSignal;
+  /** Longest wait between attempts while the connection or the server is failing. Defaults to 10000 ms. */
+  maxBackoffMs?: number;
+  /** Fired when polling stops or resumes being able to reach the status endpoint (`true` = lost). */
+  onConnectionChange?: (lost: boolean) => void;
+  /** Fired after every poll that returned a decodable status. */
+  onResponse?: (status: StatusPayload) => void;
 };
 
 export async function pollStatus(options: PollOptions): Promise<StatusPayload> {
@@ -18,18 +24,37 @@ export async function pollStatus(options: PollOptions): Promise<StatusPayload> {
     throw new ConfigurationException("pollUrl is required when polling is enabled");
   }
   let latest: StatusPayload = { status: "PENDING" };
+  let failures = 0;
   while (!options.signal?.aborted) {
     const url = withQuery(options.pollUrl, { reference: options.reference, operation: options.operation });
-    const response = await options.fetchImpl(url, {
-      method: "GET",
-      headers: { ...options.pollHeaders },
-      signal: options.signal,
-    });
-    latest = decodeJson<StatusPayload>(response.status, await response.text());
-    if (typeof latest.status === "string" && isTerminalStatus(latest.status)) {
+    let delay = options.intervalMs;
+    try {
+      const response = await options.fetchImpl(url, {
+        method: "GET",
+        headers: { ...options.pollHeaders },
+        signal: options.signal,
+      });
+      latest = decodeJson<StatusPayload>(response.status, await response.text());
+      if (failures > 0) {
+        failures = 0;
+        options.onConnectionChange?.(false);
+      }
+      options.onResponse?.(latest);
+    } catch (error) {
+      // Only the caller's abort ends polling early; network, 5xx or malformed answers are retried.
+      if (options.signal?.aborted) {
+        throw error;
+      }
+      failures += 1;
+      if (failures === 1) {
+        options.onConnectionChange?.(true);
+      }
+      delay = Math.min(options.intervalMs * 2 ** Math.min(failures, 6), options.maxBackoffMs ?? 10_000);
+    }
+    if (failures === 0 && typeof latest.status === "string" && isTerminalStatus(latest.status)) {
       return latest;
     }
-    await sleep(options.intervalMs, options.signal);
+    await sleep(delay, options.signal);
   }
   return latest;
 }

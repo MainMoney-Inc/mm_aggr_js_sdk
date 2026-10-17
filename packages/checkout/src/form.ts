@@ -152,6 +152,9 @@ function mobileMoneyPane(checkout: Checkout, state: CheckoutSnapshot): HTMLEleme
   if (!state.lockAmount || state.amount === "") {
     pane.append(amountField(checkout, state));
   }
+  if (payCurrencyOptions(state).length > 1) {
+    pane.append(payCurrencyField(checkout, state));
+  }
   pane.append(feeBox(checkout, state));
   pane.append(providerLogos(checkout, state));
   appendError(pane, state);
@@ -207,6 +210,11 @@ function emailField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   return floatingField(checkout.t("emailLabel"), input, checkout.t("emailHint"));
 }
 
+/** Wait this long after the last keystroke before looking the number up. */
+const LOOKUP_DEBOUNCE_MS = 600;
+/** Fewest digits worth a lookup. */
+const LOOKUP_MIN_DIGITS = 7;
+
 function phoneField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   const row = document.createElement("div");
   row.className = "mm-phone-row";
@@ -243,15 +251,39 @@ function phoneField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   input.autocomplete = "tel-national";
   input.placeholder = "812345678";
   input.value = state.identifier;
+  const lookup = document.createElement("span");
+  lookup.className = "mm-spinner-sm";
+  lookup.setAttribute("role", "status");
+  lookup.setAttribute("aria-label", checkout.t("lookingUp"));
+  lookup.hidden = true;
+
+  const runLookup = (): void => {
+    lookup.hidden = false;
+    void checkout
+      .matchProvider()
+      .catch(() => undefined)
+      .finally(() => {
+        lookup.hidden = true;
+      });
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
   input.addEventListener("input", () => {
     checkout.setIdentifier(input.value);
     refreshPayButton(checkout, input);
+    // Debounced: look the number up once the customer stops typing, never per keystroke.
+    clearTimeout(timer);
+    if (input.value.replace(/\D/g, "").length >= LOOKUP_MIN_DIGITS) {
+      timer = setTimeout(runLookup, LOOKUP_DEBOUNCE_MS);
+    }
   });
   input.addEventListener("blur", () => {
-    void checkout.matchProvider().catch(() => undefined);
+    clearTimeout(timer);
+    if (input.value.trim() !== "") {
+      runLookup();
+    }
   });
 
-  row.append(flag, dial, divider, input);
+  row.append(flag, dial, divider, input, lookup);
   return floatingField(checkout.t("phone"), row, checkout.t("phoneHint"));
 }
 
@@ -268,7 +300,8 @@ function amountField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
     void checkout.setAmount(input.value).catch(() => undefined);
   });
   row.append(input);
-  if (state.lockCurrency || state.availableCurrencies.length <= 1) {
+  if (state.lockCurrency || state.currencyFixed || state.availableCurrencies.length <= 1) {
+    // A host-fixed amount currency never changes; the pay currency (when selectable) has its own field.
     const badge = document.createElement("span");
     badge.className = "mm-currency-suffix";
     badge.textContent = state.currency;
@@ -291,15 +324,48 @@ function amountField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   return floatingField(checkout.t("amount"), row);
 }
 
+/** Currencies the customer may pay in; only offered when the host fixed the amount currency (cart plugins). */
+function payCurrencyOptions(state: CheckoutSnapshot): string[] {
+  if (!state.currencyFixed || state.lockCurrency || state.selectedProvider === undefined) {
+    return [];
+  }
+  return [...new Set(state.availableCurrencies)].sort();
+}
+
+function payCurrencyField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
+  const select = document.createElement("select");
+  select.className = "mm-input mm-input-bare mm-select";
+  for (const code of payCurrencyOptions(state)) {
+    const option = document.createElement("option");
+    option.value = code;
+    option.textContent = code;
+    option.selected = state.payCurrency === code;
+    select.append(option);
+  }
+  select.addEventListener("change", () => {
+    void checkout.setCurrency(select.value).catch(() => undefined);
+  });
+  return floatingField(checkout.t("payIn"), select);
+}
+
 function feeBox(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   const box = document.createElement("div");
   box.className = "mm-fee-box";
   const q = quote(state);
-  box.append(feeRow(checkout.t("merchantReceives"), formatMoney(q.receives, state)));
-  box.append(feeRow(checkout.t("processingFee"), formatMoney(q.fee, state)));
-  const total = feeRow(checkout.t("youPay"), formatMoney(q.pay, state));
+  // With a quote the whole simulation is already in the pay currency.
+  const currency = state.fees?.quote?.to_currency ?? state.currency;
+  // Never show what the merchant receives: that is not the customer's business.
+  box.append(feeRow(checkout.t("processingFee"), formatMoney(q.fee, state, currency)));
+  const total = feeRow(checkout.t("youPay"), formatMoney(q.pay, state, currency));
   total.classList.add("mm-fee-total");
   box.append(total);
+  const fx = state.fees?.quote;
+  if (fx !== undefined) {
+    const note = document.createElement("p");
+    note.className = "mm-hint";
+    note.textContent = checkout.t("exchangeRate", { from: fx.from_currency, to: fx.to_currency, rate: fx.rate });
+    box.append(note);
+  }
   return box;
 }
 
@@ -369,7 +435,7 @@ function payButton(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
 function applyPayState(button: HTMLElement, checkout: Checkout, state: CheckoutSnapshot): void {
   const ready = state.canPay;
   (button as HTMLButtonElement).disabled = !ready;
-  const total = ready ? formatMoney(quote(state).pay, state) : "—";
+  const total = ready ? formatMoney(quote(state).pay, state, state.fees?.quote?.to_currency ?? state.currency) : "—";
   button.textContent = `${checkout.t("pay")} ${total}`;
 }
 
@@ -393,8 +459,8 @@ function quote(state: CheckoutSnapshot): Quote {
   };
 }
 
-function formatMoney(value: string | null, state: CheckoutSnapshot): string {
-  if (value === null || value === "" || state.currency === "") {
+function formatMoney(value: string | null, state: CheckoutSnapshot, currency: string = state.currency): string {
+  if (value === null || value === "" || currency === "") {
     return "—";
   }
   const number = Number(value);
@@ -402,9 +468,9 @@ function formatMoney(value: string | null, state: CheckoutSnapshot): string {
     return "—";
   }
   try {
-    return new Intl.NumberFormat(state.locale, { style: "currency", currency: state.currency }).format(number);
+    return new Intl.NumberFormat(state.locale, { style: "currency", currency }).format(number);
   } catch {
-    return `${number.toFixed(2)} ${state.currency}`;
+    return `${number.toFixed(2)} ${currency}`;
   }
 }
 

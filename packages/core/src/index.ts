@@ -22,6 +22,7 @@ export {
   type Country,
   type DepositRequest,
   type FeeBearer,
+  type FeeQuote,
   type FeeSimulation,
   type PaymentMethod,
   type OperationType,

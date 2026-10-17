@@ -37,9 +37,12 @@ export function mountCheckout(element: HTMLElement, checkout: Checkout, options:
       body = confirmingStep(checkout, state, logoUrl);
     } else if (state.step === "ongoing") {
       body = messageStep(checkout.t("ongoing"));
+    } else if (state.step === "error") {
+      body = retryStep(checkout, state.error ?? checkout.t("failed"));
     } else if (state.step === "terminal") {
       const status = state.status?.status ?? "";
-      body = messageStep(status.toUpperCase() === "SUCCESS" ? checkout.t("success") : checkout.t("failed"));
+      body =
+        status.toUpperCase() === "SUCCESS" ? messageStep(checkout.t("success")) : retryStep(checkout, checkout.t("failed"));
     } else {
       body = formBody(checkout, state);
     }
@@ -47,6 +50,25 @@ export function mountCheckout(element: HTMLElement, checkout: Checkout, options:
   };
 
   const render = (state: CheckoutSnapshot): void => {
+    // A lookup that finishes while the customer is still typing must not steal the focus.
+    const fields = Array.from(element.querySelectorAll<HTMLInputElement>("input"));
+    const focused = fields.findIndex((field) => field === document.activeElement);
+    const caret = focused >= 0 ? fields[focused].selectionStart : null;
+    renderBody(state);
+    if (focused >= 0) {
+      const next = element.querySelectorAll<HTMLInputElement>("input")[focused];
+      next?.focus();
+      if (caret !== null && caret !== undefined) {
+        try {
+          next?.setSelectionRange(caret, caret);
+        } catch {
+          // Input types without selection support (email, number).
+        }
+      }
+    }
+  };
+
+  const renderBody = (state: CheckoutSnapshot): void => {
     applyTheme(element, state.theme);
     element.classList.add("mm-checkout");
     element.innerHTML = "";
@@ -66,9 +88,14 @@ export function mountCheckout(element: HTMLElement, checkout: Checkout, options:
       element.append(confirmingStep(checkout, state, logoUrl));
     } else if (state.step === "ongoing") {
       element.append(messageStep(checkout.t("ongoing")));
+    } else if (state.step === "error") {
+      element.append(retryStep(checkout, state.error ?? checkout.t("failed")));
+      return;
     } else {
       const status = state.status?.status ?? "";
-      element.append(messageStep(status.toUpperCase() === "SUCCESS" ? checkout.t("success") : checkout.t("failed")));
+      element.append(
+        status.toUpperCase() === "SUCCESS" ? messageStep(checkout.t("success")) : retryStep(checkout, checkout.t("failed")),
+      );
     }
     appendError(element, state);
   };
@@ -126,10 +153,7 @@ function overviewStep(checkout: Checkout, state: CheckoutSnapshot): HTMLElement 
     wrap.append(overviewRow(checkout.t("customerName"), state.customerName));
   }
   wrap.append(overviewRow(checkout.t("amount"), `${state.amount} ${state.currency}`));
-  if (state.fees !== undefined) {
-    wrap.append(overviewRow(checkout.t("fees"), `${state.fees.total_merchant_fee} ${state.currency}`));
-    wrap.append(overviewRow(checkout.t("netAmount"), `${state.fees.net_amount} ${state.currency}`));
-  }
+  // Merchant fee and net amount are merchant-side figures: never shown to the customer.
   if (state.partnerFee !== null) {
     wrap.append(
       overviewRow(state.partnerFee.label ?? checkout.t("partnerFee"), `${state.partnerFee.amount} ${state.partnerFee.currency}`),
@@ -156,12 +180,44 @@ function confirmingStep(checkout: Checkout, state: CheckoutSnapshot, logoUrl: st
   const caption = document.createElement("div");
   caption.textContent = state.step === "polling" ? checkout.t("polling") : checkout.t("confirming");
   wrap.append(spinner, caption);
+  if (state.step === "polling" && state.connectionLost) {
+    const lost = document.createElement("div");
+    lost.className = "mm-confirm-slow mm-confirm-offline";
+    lost.setAttribute("role", "status");
+    lost.textContent = checkout.t("connectionLost");
+    wrap.append(lost);
+  }
   if (state.step === "polling" && state.slow) {
     const notice = document.createElement("div");
     notice.className = "mm-confirm-slow";
     notice.textContent = checkout.t("slow");
     wrap.append(notice);
   }
+  return wrap;
+}
+
+/** Failure screen: no form fields, only the reason and a Retry button. */
+function retryStep(checkout: Checkout, message: string): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = "mm-confirm mm-retry";
+  const error = document.createElement("div");
+  error.className = "mm-error";
+  error.setAttribute("role", "alert");
+  error.textContent = message;
+  const hint = document.createElement("p");
+  hint.className = "mm-hint";
+  hint.textContent = checkout.t("retryHint");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "mm-pay";
+  button.textContent = checkout.t("retry");
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    void checkout.retry().catch(() => {
+      button.disabled = false;
+    });
+  });
+  wrap.append(error, hint, button);
   return wrap;
 }
 

@@ -192,6 +192,20 @@
   object-fit: contain;
 }
 
+.mm-spinner-sm {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--mm-color-line);
+  border-top-color: var(--mm-color-primary);
+  border-radius: 50%;
+  animation: mm-spin 0.8s linear infinite;
+}
+
+.mm-spinner-sm[hidden] {
+  display: none;
+}
+
 @keyframes mm-spin {
   to {
     transform: rotate(360deg);

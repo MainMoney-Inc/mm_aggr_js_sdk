@@ -345,6 +345,155 @@ describe("createCheckout", () => {
   });
 });
 
+describe("cart currency, quote, retry and email", () => {
+  const provider = {
+    code: "SIM_CD",
+    name: "Simulator",
+    entity_type: "MOBILE_MONEY",
+    country_code: "CD",
+    currency_code: "CDF",
+    accepted_currencies: ["CDF", "EUR"],
+  };
+
+  /** `afterProviders` are the responses the auto-selected provider consumes (limits, then fees). */
+  async function ready(mock: MockFetch, afterProviders: Array<[number, unknown]>, extra: Record<string, unknown> = {}) {
+    mock.enqueue(200, [{ code: "CD", name: "Congo", phone_code: "243" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [provider]);
+    for (const [status, body] of afterProviders) {
+      mock.enqueue(status, body);
+    }
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      currency: "EUR",
+      amount: "10.00",
+      lockAmount: true,
+      ...extra,
+    });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    return checkout;
+  }
+
+  it("keeps the cart currency and only offers the provider's currencies as pay currency", async () => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock, [[200, []], [200, { total_to_pay: "10.00", currency: "EUR" }]]);
+    const state = checkout.getState();
+    expect(state.currency).toBe("EUR");
+    expect(state.payCurrency).toBe("EUR");
+    expect(state.availableCurrencies).toEqual(["CDF", "EUR"]);
+    expect(state.currencyFixed).toBe(true);
+  });
+
+  it("sends payment_currency to the fee simulation and shows the quote", async () => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock, [[200, []], [200, { total_to_pay: "10.00" }]]);
+    mock.enqueue(200, []);
+    mock.enqueue(200, {
+      total_to_pay: "10.00",
+      quote: { from_currency: "EUR", to_currency: "CDF", rate: "3000", converted_amount: "30000.00" },
+    });
+    await checkout.setCurrency("CDF");
+    const simulate = mock.calls.filter((call) => call.url.endsWith("/fees/simulate")).pop();
+    expect(JSON.parse(simulate?.body ?? "{}")).toMatchObject({ currency: "EUR", payment_currency: "CDF", amount: "10.00" });
+    expect(checkout.getState().currency).toBe("EUR");
+    expect(checkout.getState().fees?.quote?.converted_amount).toBe("30000.00");
+  });
+
+  it("falls back to the cart currency with an explanation when no quote exists", async () => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock, [[200, []], [200, { total_to_pay: "10.00" }]]);
+    mock.enqueue(200, []);
+    mock.enqueue(400, { success: false, message: "No quote", response_data: { errors: { payment_currency: ["no_quote"] } } });
+    mock.enqueue(200, []);
+    mock.enqueue(200, { total_to_pay: "10.00" });
+    await checkout.setCurrency("CDF");
+    const state = checkout.getState();
+    expect(state.payCurrency).toBe("EUR");
+    expect(state.error).toBe("Conversion between CDF and EUR is not available. Please select EUR.");
+    expect(state.quoteUnavailable).toBe(false);
+  });
+
+  it("blocks paying when the only accepted currency has no quote", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [{ code: "CD", name: "Congo", phone_code: "243" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [{ ...provider, accepted_currencies: ["CDF"] }]);
+    mock.enqueue(200, []);
+    mock.enqueue(400, { message: "No quote", errors: { payment_currency: ["no_quote"] } });
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      currency: "EUR",
+      amount: "10.00",
+      lockAmount: true,
+    });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    const state = checkout.getState();
+    expect(state.quoteUnavailable).toBe(true);
+    expect(state.canPay).toBe(false);
+    expect(state.error).toContain("Please select EUR");
+  });
+
+  it("seeds the receipt email and keeps it editable", () => {
+    const checkout = createCheckout(sessionWith(new MockFetch()), {
+      operation: "deposit",
+      pollStatus: false,
+      customerEmail: " buyer@example.com ",
+    });
+    expect(checkout.getState().customerEmail).toBe("buyer@example.com");
+    checkout.setCustomerEmail("other@example.com");
+    expect(checkout.getState().customerEmail).toBe("other@example.com");
+  });
+
+  async function failedDeposit(mock: MockFetch, extra: Record<string, unknown> = {}) {
+    mock.enqueue(200, [{ code: "CD", name: "Congo", phone_code: "243" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [{ ...provider, accepted_currencies: ["EUR"], currency_code: "EUR" }]);
+    mock.enqueue(200, []);
+    mock.enqueue(200, { total_to_pay: "10.00" });
+    mock.enqueue(400, { message: "Deposit validation failed" });
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      currency: "EUR",
+      amount: "10.00",
+      lockAmount: true,
+      reference: "ORDER-9",
+      ...extra,
+    });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    checkout.setIdentifier("0812345678");
+    await checkout.confirm();
+    return checkout;
+  }
+
+  it("shows only the error with onRetry and calls it on retry", async () => {
+    let retried = 0;
+    const checkout = await failedDeposit(new MockFetch(), { onRetry: () => void (retried += 1) });
+    expect(checkout.getState().step).toBe("error");
+    await checkout.retry();
+    expect(retried).toBe(1);
+  });
+
+  it("retries in place with a new reference and idempotency key suffix", async () => {
+    const mock = new MockFetch();
+    const checkout = await failedDeposit(mock);
+    expect(checkout.getState().step).toBe("overview");
+    await checkout.retry();
+    mock.enqueue(200, { status: "PENDING" });
+    await checkout.confirm();
+    const deposits = mock.calls.filter((call) => call.url.endsWith("/deposits"));
+    expect(deposits).toHaveLength(2);
+    expect(deposits[0].headers["Idempotency-Key"]).toBe("ORDER-9");
+    expect(deposits[1].headers["Idempotency-Key"]).toBe("ORDER-9-r1");
+    expect(JSON.parse(deposits[1].body ?? "{}").reference).toBe("ORDER-9-r1");
+  });
+});
+
 describe("toE164Digits", () => {
   it.each(["812345678", "0812345678", "+243812345678", "243812345678", "00243812345678", "+243 (0)81 234 5678"])(
     "prepends the dial code exactly once for %s",

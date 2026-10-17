@@ -72,6 +72,17 @@ export type FeeSimulation = {
   provider_amount?: string;
   /** Deposit: credited after fees. Payout: debited (negative). */
   merchant_wallet_effect?: string;
+  /** Present when the customer pays in a currency other than `currency`. */
+  quote?: FeeQuote;
+};
+
+/** FX context of a cross-currency operation: original and converted amounts plus the applied rate. */
+export type FeeQuote = {
+  from_currency: string;
+  to_currency: string;
+  rate: string;
+  source?: string;
+  converted_amount: string;
 };
 
 export type FeeBearer = "MERCHANT" | "CUSTOMER";
