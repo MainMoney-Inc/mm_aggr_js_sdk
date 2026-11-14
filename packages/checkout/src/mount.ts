@@ -1,6 +1,6 @@
 /** Vanilla DOM mount for the checkout wizard. */
 
-import { applyTheme, isPhoneIdentifier } from "@mainmoneyapp/js-core";
+import { applyColorScheme, applyTheme, isPhoneIdentifier, type CheckoutVariant } from "@mainmoneyapp/js-core";
 
 import { DEFAULT_LOGO_URL } from "./assets/logo.js";
 import type { Checkout, CheckoutSnapshot } from "./checkout.js";
@@ -14,7 +14,30 @@ export type MountOptions = {
   defaultCountry?: string;
   /** Footer links; only links with a URL are shown. */
   links?: FooterLinks;
+  /** `embedded` removes the card chrome (surface, padding, radius, shadow) for use inside a host modal or card. */
+  variant?: CheckoutVariant;
 };
+
+/**
+ * Everything that decides the DOM except the palette and the fields the customer is typing in (the inputs
+ * already hold those): a change of only the palette must not re-render, or the focused input would be rebuilt.
+ */
+function layoutKey(state: CheckoutSnapshot): string {
+  return JSON.stringify({
+    ...state,
+    colorScheme: undefined,
+    resolvedColorScheme: undefined,
+    identifier: undefined,
+    customerEmail: undefined,
+    amount: undefined,
+    canPay: undefined,
+  });
+}
+
+function applyPalette(element: HTMLElement, state: CheckoutSnapshot): void {
+  applyColorScheme(element, state.colorScheme);
+  element.setAttribute("data-mm-resolved-theme", state.resolvedColorScheme);
+}
 
 export function mountCheckout(element: HTMLElement, checkout: Checkout, options: MountOptions = {}): () => void {
   const logoUrl = options.logoUrl ?? DEFAULT_LOGO_URL;
@@ -49,12 +72,29 @@ export function mountCheckout(element: HTMLElement, checkout: Checkout, options:
     element.append(formChrome(checkout, state, logoUrl, options.links ?? {}, body));
   };
 
+  let renderedKey: string | undefined;
+  let renderedScheme = "";
+
   const render = (state: CheckoutSnapshot): void => {
+    element.setAttribute("data-mm-variant", options.variant ?? "default");
+    const key = layoutKey(state);
+    const scheme = `${state.colorScheme}/${state.resolvedColorScheme}`;
+    if (key === renderedKey) {
+      // Palette-only change: flip the attributes, keep the DOM (input focus, caret and value survive).
+      if (scheme !== renderedScheme) {
+        applyPalette(element, state);
+        renderedScheme = scheme;
+      }
+      return;
+    }
+    renderedKey = key;
+    renderedScheme = scheme;
     // A lookup that finishes while the customer is still typing must not steal the focus.
     const fields = Array.from(element.querySelectorAll<HTMLInputElement>("input"));
     const focused = fields.findIndex((field) => field === document.activeElement);
     const caret = focused >= 0 ? fields[focused].selectionStart : null;
     renderBody(state);
+    applyPalette(element, state);
     if (focused >= 0) {
       const next = element.querySelectorAll<HTMLInputElement>("input")[focused];
       next?.focus();

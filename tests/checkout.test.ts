@@ -506,3 +506,152 @@ describe("toE164Digits", () => {
     expect(toE164Digits("243123456", "243")).toBe("243243123456");
   });
 });
+
+describe("phone normalisation before a provider is known", () => {
+  const PROVIDERS = [
+    { code: "MTN_CD", name: "MTN", entity_type: "MOBILE_MONEY", country_code: "CD", currency_code: "USD" },
+    { code: "ORANGE_CD", name: "Orange", entity_type: "MOBILE_MONEY", country_code: "CD", currency_code: "USD" },
+  ];
+
+  async function ready(mock: MockFetch, extra: Record<string, unknown> = {}) {
+    mock.enqueue(200, [{ code: "CD", name: "Congo", phone_code: "243" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, PROVIDERS);
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      currency: "USD",
+      amount: "10.00",
+      lockAmount: true,
+      ...extra,
+    });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    return checkout;
+  }
+
+  const matchAccount = (mock: MockFetch): string[] =>
+    mock.calls
+      .filter((call) => call.url.includes("/match-provider"))
+      .map((call) => new URL(call.url).searchParams.get("account_number") ?? "");
+
+  it.each(["987805910", "0987805910", "+243987805910"])("sends 243987805910 to match-provider for %s", async (typed) => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock);
+    expect(checkout.getState().selectedProvider).toBeUndefined();
+    mock.enqueue(200, { entity: "MTN_CD" });
+    checkout.setIdentifier(typed);
+    await checkout.matchProvider();
+    expect(matchAccount(mock)).toEqual(["243987805910"]);
+  });
+
+  it("canPay is true with a valid local number before a provider is matched", async () => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock);
+    expect(checkout.getState().selectedProvider).toBeUndefined();
+    checkout.setIdentifier("987805910");
+    expect(checkout.getState().canPay).toBe(true);
+    checkout.setIdentifier("12");
+    expect(checkout.getState().canPay).toBe(false);
+  });
+
+  it("looks the number up again when the country (dial code) changes", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [
+      { code: "CD", name: "Congo", phone_code: "243" },
+      { code: "KE", name: "Kenya", phone_code: "254" },
+    ]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, PROVIDERS);
+    const checkout = createCheckout(sessionWith(mock), { operation: "deposit", pollStatus: false, currency: "USD", amount: "10", lockAmount: true });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    mock.enqueue(200, { entity: "MTN_CD" });
+    checkout.setIdentifier("712345678");
+    await checkout.matchProvider();
+    mock.enqueue(200, [{ code: "MPESA_KE", name: "M-Pesa", entity_type: "MOBILE_MONEY", country_code: "KE", currency_code: "USD" }]);
+    mock.enqueue(200, { entity: "MPESA_KE" });
+    await checkout.selectCountry("KE");
+    expect(matchAccount(mock)).toEqual(["243712345678", "254712345678"]);
+  });
+
+  it("keeps a bank account number raw once a non-phone provider is selected", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, [{ code: "CD", name: "Congo", phone_code: "243" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [
+      { code: "BANK_CD", name: "Bank", entity_type: "BANK", country_code: "CD", currency_code: "USD" },
+      ...PROVIDERS,
+    ]);
+    const checkout = createCheckout(sessionWith(mock), { operation: "payout", pollStatus: false, currency: "USD" });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    mock.enqueue(200, []);
+    await checkout.selectProvider("BANK_CD");
+    mock.enqueue(200, { entity: "BANK_CD" });
+    checkout.setIdentifier("00123456789");
+    await checkout.matchProvider();
+    expect(matchAccount(mock)).toEqual(["00123456789"]);
+  });
+});
+
+describe("cart currency and session defaults", () => {
+  const CDF_ONLY = {
+    code: "AIRTEL_CD",
+    name: "Airtel",
+    entity_type: "MOBILE_MONEY",
+    country_code: "CD",
+    currency_code: "CDF",
+    accepted_currencies: ["CDF"],
+  };
+
+  async function load(mock: MockFetch, session: ReturnType<typeof createSession>, options: Record<string, unknown> = {}) {
+    mock.enqueue(200, [{ code: "CD", name: "Congo", phone_code: "243" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [CDF_ONLY]);
+    mock.enqueue(200, []);
+    mock.enqueue(200, { total_to_pay: "10.00" });
+    const checkout = createCheckout(session, { operation: "deposit", pollStatus: false, amount: "10.00", lockAmount: true, ...options });
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    return checkout;
+  }
+
+  it("a USD cart with a CDF-only provider pays in CDF and keeps currency USD", async () => {
+    const mock = new MockFetch();
+    const checkout = await load(mock, sessionWith(mock), { currency: "USD" });
+    const state = checkout.getState();
+    expect(state.currency).toBe("USD");
+    expect(state.payCurrency).toBe("CDF");
+    const simulate = mock.calls.filter((call) => call.url.endsWith("/fees/simulate")).pop();
+    expect(JSON.parse(simulate?.body ?? "{}")).toMatchObject({ currency: "USD", payment_currency: "CDF" });
+    mock.enqueue(200, { status: "PENDING" });
+    checkout.setIdentifier("987805910");
+    await checkout.pay();
+    const deposit = mock.calls.find((call) => call.url.endsWith("/deposits"));
+    expect(JSON.parse(deposit?.body ?? "{}")).toMatchObject({ currency: "USD", payment_currency: "CDF", customer_phone: "243987805910" });
+  });
+
+  it("createSession currency and lockCurrency are the defaults for createCheckout", async () => {
+    const mock = new MockFetch();
+    const session = createSession({
+      merchantBackendUrl: "https://shop.example/payments",
+      fetch: mock.fetch,
+      currency: "usd",
+      lockCurrency: true,
+    });
+    const checkout = createCheckout(session, { operation: "deposit", pollStatus: false });
+    const state = checkout.getState();
+    expect(state.currency).toBe("USD");
+    expect(state.currencyFixed).toBe(true);
+    expect(state.lockCurrency).toBe(true);
+  });
+
+  it("checkout options win over the session defaults", () => {
+    const mock = new MockFetch();
+    const session = createSession({ merchantBackendUrl: "https://shop.example/payments", fetch: mock.fetch, currency: "USD", lockCurrency: true });
+    const state = createCheckout(session, { operation: "deposit", pollStatus: false, currency: "EUR", lockCurrency: false }).getState();
+    expect(state.currency).toBe("EUR");
+    expect(state.lockCurrency).toBe(false);
+  });
+});

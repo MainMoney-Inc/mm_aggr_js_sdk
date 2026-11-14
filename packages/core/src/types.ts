@@ -11,6 +11,22 @@ export type CheckoutTheme = {
   background: string;
 };
 
+/** Palette selection: `auto` follows the visitor's `prefers-color-scheme`. */
+export type ColorScheme = "light" | "dark" | "auto";
+
+/** Host-owned theme signal (a Svelte store, Angular/Preact signal wrapper, ...): read it and listen for changes. */
+export type ColorSchemeSource = {
+  get(): ColorScheme;
+  subscribe(callback: (scheme: ColorScheme) => void): () => void;
+};
+
+/** `embedded` drops the card chrome (surface, padding, radius, shadow) for use inside a host modal or card. */
+export type CheckoutVariant = "default" | "embedded";
+
+export function isColorScheme(value: unknown): value is ColorScheme {
+  return value === "light" || value === "dark" || value === "auto";
+}
+
 export const DEFAULT_THEME: CheckoutTheme = {
   primary: "#ff3366",
   secondary: "#5f5e5e",
