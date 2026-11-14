@@ -54,4 +54,13 @@ describe("joinUrl", () => {
   it("joins a base URL and path without duplicating slashes", () => {
     expect(joinUrl("https://shop.example/payments/", "/countries")).toBe("https://shop.example/payments/countries");
   });
+
+  it("handles long slash runs without backtracking", () => {
+    const slashes = "/".repeat(100_000);
+    expect(joinUrl(`https://shop.example${slashes}`, `${slashes}countries`)).toBe("https://shop.example/countries");
+  });
+
+  it("returns absolute URLs unchanged", () => {
+    expect(joinUrl("https://shop.example", "https://other.example/x")).toBe("https://other.example/x");
+  });
 });

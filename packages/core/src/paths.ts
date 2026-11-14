@@ -24,11 +24,23 @@ export const DEFAULT_PATHS: MerchantPaths = {
   payouts: "/payouts",
 };
 
-export function joinUrl(base: string, path: string): string {
-  const prefix = base.replace(/\/+$/, "");
-  const suffix = path.startsWith("http://") || path.startsWith("https://") ? path : path.replace(/^\/+/, "/");
-  if (suffix.startsWith("http://") || suffix.startsWith("https://")) {
-    return suffix;
+/** Strip leading and/or trailing "/" in linear time (avoids regex backtracking on long slash runs). */
+export function trimSlashes(value: string, { start = false, end = false }: { start?: boolean; end?: boolean } = {}): string {
+  let from = 0;
+  let to = value.length;
+  if (start) {
+    while (from < to && value.charCodeAt(from) === 47) from += 1;
   }
-  return `${prefix}${suffix.startsWith("/") ? suffix : `/${suffix}`}`;
+  if (end) {
+    while (to > from && value.charCodeAt(to - 1) === 47) to -= 1;
+  }
+  return value.slice(from, to);
+}
+
+export function joinUrl(base: string, path: string): string {
+  const prefix = trimSlashes(base, { end: true });
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+  return `${prefix}/${trimSlashes(path, { start: true })}`;
 }

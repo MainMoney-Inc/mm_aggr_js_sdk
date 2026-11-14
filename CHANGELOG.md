@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Security: `joinUrl` trims slashes in linear time (CodeQL `js/polynomial-redos`).
+- Security: dependency updates (vite, vitest 4, fast-uri, source-map-js, tinypool); the Angular wrapper and example build on Angular 21.
+- Workflows declare least-privilege `permissions: contents: read` (CodeQL).
+
 ## 0.1.3
 
 - Fix: `match-provider` and `canPay` used the bare local number until a provider was selected. Mobile money
