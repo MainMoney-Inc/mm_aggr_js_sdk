@@ -9,15 +9,19 @@ export { addDecimalStrings, addMoney, assertSameCurrency, type Money } from "./m
 export { DEFAULT_PATHS, joinUrl, type MerchantPaths } from "./paths.js";
 export { Emitter, type Listener } from "./events.js";
 export { EN, FR, createTranslator, type MessageCatalog } from "./i18n.js";
-export { applyTheme, themeFromPreferences } from "./theme.js";
+export { applyColorScheme, applyTheme, themeFromPreferences } from "./theme.js";
 export {
   DEFAULT_THEME,
+  isColorScheme,
   extractCustomerName,
   isMobileMoney,
   isPhoneIdentifier,
   isTerminalStatus,
   type AmountLimit,
   type CheckoutLocale,
+  type CheckoutVariant,
+  type ColorScheme,
+  type ColorSchemeSource,
   type CheckoutTheme,
   type Country,
   type DepositRequest,
@@ -32,4 +36,4 @@ export {
   type StatusPayload,
 } from "./types.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.1.3";

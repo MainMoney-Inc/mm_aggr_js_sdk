@@ -1,6 +1,6 @@
 /** Apply checkout theme as CSS variables on an element. */
 
-import { DEFAULT_THEME, type CheckoutTheme } from "./types.js";
+import { DEFAULT_THEME, type CheckoutTheme, type ColorScheme } from "./types.js";
 
 export function themeFromPreferences(payload: Record<string, unknown>): CheckoutTheme {
   return {
@@ -16,6 +16,11 @@ export function applyTheme(element: { style: { setProperty: (name: string, value
   element.style.setProperty("--mm-color-secondary", theme.secondary);
   element.style.setProperty("--mm-color-accent", theme.accent);
   element.style.setProperty("--mm-color-background", theme.background);
+}
+
+/** Sets `data-mm-theme` only; cheap and safe to call while the form has focus (no re-render). */
+export function applyColorScheme(element: { setAttribute: (name: string, value: string) => void }, scheme: ColorScheme): void {
+  element.setAttribute("data-mm-theme", scheme);
 }
 
 function stringOr(value: unknown, fallback: string): string {

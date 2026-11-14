@@ -13,6 +13,10 @@ export type CreateSessionOptions = {
   locale?: CheckoutLocale;
   messages?: Record<string, string>;
   theme?: Partial<CheckoutTheme>;
+  /** Cart currency from the merchant session payload; default for `createCheckout({ currency })`. */
+  currency?: string;
+  /** Default for `createCheckout({ lockCurrency })`. */
+  lockCurrency?: boolean;
 };
 
 export type Session = {
@@ -24,6 +28,8 @@ export type Session = {
   locale: CheckoutLocale;
   messages: Record<string, string>;
   theme: CheckoutTheme;
+  currency?: string;
+  lockCurrency?: boolean;
 };
 
 export function createSession(options: CreateSessionOptions): Session {
@@ -40,5 +46,7 @@ export function createSession(options: CreateSessionOptions): Session {
     locale: options.locale ?? "en",
     messages: options.messages ?? {},
     theme: { ...DEFAULT_THEME, ...options.theme },
+    currency: options.currency,
+    lockCurrency: options.lockCurrency,
   };
 }

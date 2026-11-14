@@ -7,11 +7,14 @@ import {
   MerchantBackendException,
   createTranslator,
   extractCustomerName,
+  isColorScheme,
   isPhoneIdentifier,
   isTerminalStatus,
   type AmountLimit,
   type CheckoutLocale,
   type CheckoutTheme,
+  type ColorScheme,
+  type ColorSchemeSource,
   type Country,
   type FeeBearer,
   type FeeSimulation,
@@ -39,6 +42,11 @@ export type CreateCheckoutOptions = {
   locale?: CheckoutLocale;
   messages?: Partial<MessageCatalog>;
   theme?: Partial<CheckoutTheme>;
+  /**
+   * `light`, `dark` or `auto` (default: follows `prefers-color-scheme` live). May also be a host-owned signal
+   * (`{ get, subscribe }`); the widget follows it until `close()`.
+   */
+  colorScheme?: ColorScheme | ColorSchemeSource;
   reference?: string;
   amount?: string;
   /** Merchant fee added on top of `amount` (deposits; the merchant must be allowed to add fees). */
@@ -47,9 +55,10 @@ export type CreateCheckoutOptions = {
   /**
    * Currency of `amount` (the cart/order currency). When set it never changes: a provider that accepts
    * other currencies only changes the currency the customer pays in (`payCurrency`), through a quote.
+   * Defaults to the `currency` given to `createSession`.
    */
   currency?: string;
-  /** Forbid choosing another pay currency; the customer always pays in `currency`. */
+  /** Forbid choosing another pay currency; the customer always pays in `currency`. Defaults to the session's. */
   lockCurrency?: boolean;
   /** Pre-fills the optional receipt address; the customer can still change it. */
   customerEmail?: string;
@@ -112,6 +121,10 @@ export type CheckoutSnapshot = {
   /** True once the first status poll succeeded, i.e. the status endpoint is reachable. */
   pollConfirmed: boolean;
   theme: CheckoutTheme;
+  /** Selected palette (`auto` resolves through `prefers-color-scheme` in CSS). */
+  colorScheme: ColorScheme;
+  /** `colorScheme` with `auto` resolved through `matchMedia("(prefers-color-scheme: dark)")`, kept live. */
+  resolvedColorScheme: "light" | "dark";
 };
 
 export type Checkout = {
@@ -125,6 +138,8 @@ export type Checkout = {
   setCustomerEmail(value: string): void;
   setMethod(method: PaymentMethod): void;
   setLocale(locale: CheckoutLocale): void;
+  /** Switch palette live: notifies subscribers; `mountCheckout` only flips `data-mm-theme` (no re-render, focus kept). */
+  setColorScheme(scheme: ColorScheme): void;
   matchProvider(): Promise<void>;
   setCurrency(code: string): Promise<void>;
   /** After an error: start over (new session via `onRetry`, or a new attempt in place). */
@@ -196,9 +211,9 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   const theme = { ...session.theme, ...options.theme };
   const emitter = new Emitter();
   const pollAbort = new AbortController();
-  const explicitCurrency = options.currency?.trim().toUpperCase() ?? "";
+  const explicitCurrency = (options.currency ?? session.currency)?.trim().toUpperCase() ?? "";
   const fixedCurrency = explicitCurrency !== "";
-  const lockCurrency = options.lockCurrency === true;
+  const lockCurrency = (options.lockCurrency ?? session.lockCurrency) === true;
 
   const state: CheckoutSnapshot = {
     step: "country",
@@ -226,6 +241,8 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     connectionLost: false,
     pollConfirmed: false,
     theme,
+    colorScheme: "auto",
+    resolvedColorScheme: "light",
   };
 
   let lastMatchedIdentifier = "";
@@ -255,7 +272,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
   /** Digits a customer must type: long enough to be a local number, short enough to exclude pasted junk. */
   const hasValidLocalNumber = (): boolean => {
     const digits = e164OrIdentifier().replace(/\D/g, "");
-    const dial = state.selectedCountry?.phone_code?.replace(/\D/g, "") ?? "";
+    const dial = dialPrefix() ? (state.selectedCountry?.phone_code?.replace(/\D/g, "") ?? "") : "";
     const national = digits.length - dial.length;
     return national >= MIN_LOCAL_NUMBER_DIGITS && national <= MAX_LOCAL_NUMBER_DIGITS;
   };
@@ -427,6 +444,10 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         await refreshLimitsAndFees();
       }
       notify();
+      // The dial code changed: a number typed under the previous country must be looked up again.
+      if (state.identifier.trim() !== "") {
+        await matchProvider();
+      }
     } catch (error) {
       fail(error);
     }
@@ -812,16 +833,66 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     return state.partnerFee?.amount ?? options.fees ?? "";
   };
 
+  /**
+   * Mobile money numbers are always sent as `<dial code><national>`, also before a provider is chosen (the
+   * lookup is what finds it). Only a selected, non-phone provider (bank account, card) keeps the raw value.
+   */
+  const dialPrefix = (): boolean => {
+    if (state.activeMethod !== "mobile_money" || state.selectedCountry?.phone_code === undefined) {
+      return false;
+    }
+    return state.selectedProvider === undefined || isPhoneIdentifier(state.selectedProvider);
+  };
+
   const e164OrIdentifier = (): string => {
     const raw = state.identifier.trim();
-    if (!isPhoneIdentifier(state.selectedProvider) || state.selectedCountry?.phone_code === undefined) {
+    if (!dialPrefix() || state.selectedCountry?.phone_code === undefined) {
       return raw;
     }
     return toE164Digits(raw, state.selectedCountry.phone_code);
   };
 
+  const darkQuery =
+    typeof globalThis.matchMedia === "function" ? globalThis.matchMedia("(prefers-color-scheme: dark)") : undefined;
+  const resolveColorScheme = (): "light" | "dark" =>
+    state.colorScheme === "auto" ? (darkQuery?.matches === true ? "dark" : "light") : state.colorScheme;
+
+  const setColorScheme = (scheme: ColorScheme): void => {
+    if (!isColorScheme(scheme) || state.colorScheme === scheme) {
+      return;
+    }
+    state.colorScheme = scheme;
+    state.resolvedColorScheme = resolveColorScheme();
+    notify();
+  };
+
+  const onSystemSchemeChange = (): void => {
+    const resolved = resolveColorScheme();
+    if (state.colorScheme === "auto" && state.resolvedColorScheme !== resolved) {
+      state.resolvedColorScheme = resolved;
+      notify();
+    }
+  };
+
+  const releases: Array<() => void> = [];
+  const colorSource = options.colorScheme;
+  if (colorSource !== undefined && typeof colorSource === "object") {
+    state.colorScheme = isColorScheme(colorSource.get()) ? colorSource.get() : "auto";
+    releases.push(colorSource.subscribe(setColorScheme));
+  } else if (isColorScheme(colorSource)) {
+    state.colorScheme = colorSource;
+  }
+  state.resolvedColorScheme = resolveColorScheme();
+  if (darkQuery !== undefined) {
+    darkQuery.addEventListener("change", onSystemSchemeChange);
+    releases.push(() => darkQuery.removeEventListener("change", onSystemSchemeChange));
+  }
+
   const close = (): void => {
     pollAbort.abort();
+    for (const release of releases.splice(0)) {
+      release();
+    }
   };
 
   return {
@@ -835,6 +906,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     setCustomerEmail,
     setMethod,
     setLocale,
+    setColorScheme,
     matchProvider,
     setCurrency,
     retry,

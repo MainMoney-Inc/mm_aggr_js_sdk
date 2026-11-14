@@ -3,13 +3,84 @@
   --mm-color-secondary: #5f5e5e;
   --mm-color-accent: #b90040;
   --mm-color-background: #f8f9fb;
+  --mm-color-surface: var(--mm-color-background);
+  --mm-color-surface-alt: #eef0f2;
+  --mm-color-ink: #170f2e;
+  --mm-color-muted: #5b5f66;
+  --mm-color-line: #cfd2d6;
+  --mm-color-input-bg: #ffffff;
+  --mm-color-tile-bg: #ffffff;
+  --mm-color-tile-ink: #191c1e;
+  --mm-color-fee-bg: #f2f2f2;
+  --mm-color-on-primary: #ffffff;
+  --mm-color-on-ink: #ffffff;
+  --mm-color-disabled: #6e6a79;
+  --mm-color-disabled-ink: #ffffff;
+  --mm-color-error: #b90040;
+  --mm-color-success: #0b7a43;
+  --mm-color-notice-bg: #fff4e5;
+  --mm-color-notice-ink: #6b4200;
   font-family: Inter, system-ui, sans-serif;
-  color: #191c1e;
-  background: var(--mm-color-background);
-  border-radius: 16px;
-  padding: 1.5rem;
-  max-width: 28rem;
+  color: var(--mm-color-ink);
+  background: var(--mm-color-surface);
+  border-radius: var(--mm-radius, 16px);
+  padding: var(--mm-padding, 1.5rem);
+  width: 100%;
+  max-width: var(--mm-max-width, none);
   box-sizing: border-box;
+  container-type: inline-size;
+  color-scheme: light;
+}
+
+/* Dark palette: explicit, and for "auto" through prefers-color-scheme. Text pairs keep WCAG AA (4.5:1). */
+.mm-checkout[data-mm-theme="dark"] {
+  --mm-color-surface: #14161a;
+  --mm-color-surface-alt: #262a31;
+  --mm-color-ink: #eef0f3;
+  --mm-color-muted: #a9afb9;
+  --mm-color-line: #3a3f48;
+  --mm-color-input-bg: #1d2026;
+  --mm-color-tile-bg: #f4f5f7;
+  --mm-color-fee-bg: #1d2026;
+  --mm-color-on-ink: #14161a;
+  --mm-color-disabled: #4a4f59;
+  --mm-color-disabled-ink: #eef0f3;
+  --mm-color-error: #ff8aa6;
+  --mm-color-success: #5fd39a;
+  --mm-color-notice-bg: #3a2c12;
+  --mm-color-notice-ink: #ffd89a;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mm-checkout[data-mm-theme="auto"] {
+    --mm-color-surface: #14161a;
+    --mm-color-surface-alt: #262a31;
+    --mm-color-ink: #eef0f3;
+    --mm-color-muted: #a9afb9;
+    --mm-color-line: #3a3f48;
+    --mm-color-input-bg: #1d2026;
+    --mm-color-tile-bg: #f4f5f7;
+    --mm-color-fee-bg: #1d2026;
+    --mm-color-on-ink: #14161a;
+    --mm-color-disabled: #4a4f59;
+    --mm-color-disabled-ink: #eef0f3;
+    --mm-color-error: #ff8aa6;
+    --mm-color-success: #5fd39a;
+    --mm-color-notice-bg: #3a2c12;
+    --mm-color-notice-ink: #ffd89a;
+    color-scheme: dark;
+  }
+}
+
+/* Embedded: no card chrome, the host modal/card provides it. */
+.mm-checkout[data-mm-variant="embedded"] {
+  --mm-color-surface: transparent;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
 }
 
 .mm-checkout *,
@@ -27,20 +98,21 @@
 
 .mm-label {
   font-size: 0.875rem;
-  color: var(--mm-color-secondary);
+  color: var(--mm-color-muted);
 }
 
 .mm-input,
 .mm-select {
-  border: 1px solid #e0e3e5;
+  border: 1px solid var(--mm-color-line);
   border-radius: 8px;
   padding: 0.65rem 0.75rem;
   font-size: 1rem;
-  background: #fff;
+  background: var(--mm-color-input-bg);
+  color: var(--mm-color-ink);
 }
 
 .mm-input:disabled {
-  background: #eef0f2;
+  background: var(--mm-color-surface-alt);
   cursor: not-allowed;
 }
 
@@ -54,10 +126,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e0e3e5;
+  border: 1px solid var(--mm-color-line);
   border-radius: 8px;
-  background: #fff;
-  color: var(--mm-color-secondary);
+  background: var(--mm-color-input-bg);
+  color: var(--mm-color-muted);
 }
 
 .mm-amount-row {
@@ -75,10 +147,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e0e3e5;
+  border: 1px solid var(--mm-color-line);
   border-radius: 8px;
-  background: #fff;
-  color: var(--mm-color-secondary);
+  background: var(--mm-color-input-bg);
+  color: var(--mm-color-muted);
   font-size: 0.875rem;
   font-weight: 600;
   padding: 0.65rem 0.5rem;
@@ -92,12 +164,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #e0e3e5;
+  border: 1px solid var(--mm-color-line);
   border-radius: 8px;
   padding: 0.75rem;
   margin-bottom: 0.5rem;
   cursor: pointer;
-  background: #fff;
+  background: var(--mm-color-tile-bg);
+  color: var(--mm-color-tile-ink);
 }
 
 .mm-provider.is-selected,
@@ -117,7 +190,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #e0e3e5;
+  border-bottom: 1px solid var(--mm-color-line);
   font-size: 0.9375rem;
 }
 
@@ -138,17 +211,17 @@
 
 .mm-button-primary {
   background: var(--mm-color-primary);
-  color: #fff;
+  color: var(--mm-color-on-primary);
 }
 
 .mm-button-secondary {
-  background: #eef0f2;
-  color: #191c1e;
+  background: var(--mm-color-surface-alt);
+  color: var(--mm-color-ink);
 }
 
 .mm-error {
   margin-top: 1rem;
-  color: var(--mm-color-accent);
+  color: var(--mm-color-error);
   font-size: 0.875rem;
 }
 
@@ -160,7 +233,10 @@
 .mm-confirm-slow {
   margin-top: 1rem;
   font-size: 0.875rem;
-  opacity: 0.8;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.75rem;
+  background: var(--mm-color-notice-bg);
+  color: var(--mm-color-notice-ink);
 }
 
 .mm-spinner {
@@ -215,12 +291,13 @@
 /* ---------- Single-form checkout (deposits) ---------- */
 
 .mm-checkout-form {
-  --mm-color-ink: #170f2e;
-  --mm-color-line: #cfd2d6;
-  --mm-color-muted: #8b8f96;
-  background: #fff;
-  max-width: 32rem;
-  padding: 1rem 1.25rem 1.25rem;
+  background: var(--mm-color-surface);
+  padding: var(--mm-padding, 1rem 1.25rem 1.25rem);
+}
+
+.mm-checkout-form[data-mm-variant="embedded"] {
+  background: transparent;
+  padding: 0;
 }
 
 .mm-form button,
@@ -304,8 +381,8 @@
   border: none;
   border-radius: 999px;
   padding: 0.85rem 0.5rem;
-  background: #ececf1;
-  color: #3a3a46;
+  background: var(--mm-color-surface-alt);
+  color: var(--mm-color-ink);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -315,7 +392,7 @@
 
 .mm-tab.is-active {
   background: var(--mm-color-ink);
-  color: #fff;
+  color: var(--mm-color-on-ink);
 }
 
 .mm-pane {
@@ -333,7 +410,7 @@
   border: 1px solid var(--mm-color-line);
   border-radius: 1.25rem;
   padding: 1.1rem 1rem 0.7rem;
-  background: #fafafa;
+  background: var(--mm-color-input-bg);
 }
 
 .mm-floating-box:focus-within {
@@ -346,7 +423,7 @@
   top: -0.55rem;
   left: 0.9rem;
   padding: 0 0.4rem;
-  background: #fff;
+  background: var(--mm-color-surface);
   color: var(--mm-color-muted);
   font-size: 0.65rem;
   letter-spacing: 0.04em;
@@ -410,7 +487,8 @@
   padding: 1.1rem 1.1rem 0.9rem;
   border: 1px solid var(--mm-color-line);
   border-radius: 1.25rem;
-  background: #f2f2f2;
+  background: var(--mm-color-fee-bg);
+  color: var(--mm-color-ink);
   font-size: 0.95rem;
 }
 
@@ -424,13 +502,13 @@
 .mm-fee-total {
   margin-top: 0.4rem;
   padding-top: 0.6rem;
-  border-top: 1px solid #9a9a9a;
+  border-top: 1px solid var(--mm-color-muted);
   font-weight: 700;
 }
 
 .mm-providers {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
   gap: 0.6rem;
   margin-bottom: 1.1rem;
 }
@@ -445,10 +523,10 @@
   justify-content: center;
   min-height: 3.4rem;
   padding: 0.4rem;
-  border: 1px solid #e3e5e8;
+  border: 1px solid var(--mm-color-line);
   border-radius: 0.9rem;
-  background: #fff;
-  color: var(--mm-color-ink);
+  background: var(--mm-color-tile-bg);
+  color: var(--mm-color-tile-ink);
   font-size: 0.75rem;
   cursor: pointer;
 }
@@ -470,14 +548,15 @@
   border-radius: 999px;
   padding: 1rem;
   background: var(--mm-color-ink);
-  color: #fff;
+  color: var(--mm-color-on-ink);
   font-size: 1.05rem;
   font-weight: 700;
   cursor: pointer;
 }
 
 .mm-pay:disabled {
-  background: #8f8a99;
+  background: var(--mm-color-disabled);
+  color: var(--mm-color-disabled-ink);
   cursor: not-allowed;
 }
 
@@ -525,12 +604,27 @@
   text-decoration: underline;
 }
 
-@media (max-width: 26rem) {
+@container (max-width: 26rem) {
+  .mm-title {
+    font-size: 1.5rem;
+  }
+
+  .mm-form-body {
+    margin-top: 1.5rem;
+  }
+
+  .mm-fee-row {
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+  }
+}
+
+@container (max-width: 20rem) {
   .mm-providers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .mm-title {
-    font-size: 1.5rem;
+  .mm-tabs {
+    flex-wrap: wrap;
   }
 }

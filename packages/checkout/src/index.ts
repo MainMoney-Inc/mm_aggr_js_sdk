@@ -9,3 +9,4 @@ export {
 } from "./checkout.js";
 export { mountCheckout, type MountOptions } from "./mount.js";
 export { pollStatus, type PollOptions } from "./poll.js";
+export type { CheckoutVariant, ColorScheme, ColorSchemeSource } from "@mainmoneyapp/js-core";

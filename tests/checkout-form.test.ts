@@ -230,3 +230,40 @@ describe("flagEmoji", () => {
     expect(flagEmoji(undefined)).toBe("");
   });
 });
+
+describe("form flow before a provider is matched", () => {
+  const SECOND = { ...PROVIDER, code: "ORANGE_CD", name: "Orange" };
+
+  it("looks up the E.164 number and can pay with a valid local number", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, COUNTRIES);
+    mock.enqueue(200, {});
+    mock.enqueue(200, [PROVIDER, SECOND]);
+    const checkout = createCheckout(sessionWith(mock), FORM_OPTIONS);
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    expect(checkout.getState().selectedProvider).toBeUndefined();
+    checkout.setIdentifier("0987805910");
+    expect(checkout.getState().canPay).toBe(true);
+    mock.enqueue(200, { entity: "ORANGE_CD" });
+    queueQuote(mock, "10.00");
+    await checkout.matchProvider();
+    const lookup = mock.calls.find((call) => call.url.includes("/match-provider"));
+    expect(new URL(lookup?.url ?? "").searchParams.get("account_number")).toBe("243987805910");
+    expect(checkout.getState().selectedProvider?.code).toBe("ORANGE_CD");
+  });
+
+  it("keeps the cart currency USD while a CDF-only provider is paid in CDF", async () => {
+    const mock = new MockFetch();
+    mock.enqueue(200, COUNTRIES);
+    mock.enqueue(200, {});
+    mock.enqueue(200, [{ ...PROVIDER, code: "AIRTEL_CD", currency_code: "CDF", accepted_currencies: ["CDF"] }]);
+    queueQuote(mock, "10.00");
+    const checkout = createCheckout(sessionWith(mock), FORM_OPTIONS);
+    await checkout.loadCountries();
+    await checkout.selectCountry("CD");
+    expect(checkout.getState()).toMatchObject({ currency: "USD", payCurrency: "CDF" });
+    const simulate = mock.calls.filter((call) => call.url.endsWith("/fees/simulate")).pop();
+    expect(JSON.parse(simulate?.body ?? "{}")).toMatchObject({ currency: "USD", payment_currency: "CDF" });
+  });
+});

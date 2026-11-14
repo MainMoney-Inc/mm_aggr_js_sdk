@@ -1,17 +1,7 @@
 import { isPlatformBrowser } from "@angular/common";
-import {
-  Component,
-  ElementRef,
-  inject,
-  Input,
-  OnChanges,
-  OnDestroy,
-  PLATFORM_ID,
-  SimpleChanges,
-  ViewChild,
-} from "@angular/core";
+import { Component, ElementRef, PLATFORM_ID, effect, inject, input, viewChild } from "@angular/core";
 
-import type { Checkout } from "@mainmoneyapp/js-checkout";
+import type { Checkout, CheckoutVariant, ColorScheme } from "@mainmoneyapp/js-checkout";
 import { mountCheckout } from "@mainmoneyapp/js-checkout";
 
 /**
@@ -19,31 +9,38 @@ import { mountCheckout } from "@mainmoneyapp/js-checkout";
  * (`angular.json` -> `styles`, or `src/main.ts`).
  *
  * The DOM mount only runs in the browser, so the component is safe under SSR.
+ * `colorScheme` follows your theme signal: every change calls `checkout.setColorScheme`, which only flips the
+ * palette (the form is not re-rendered, so a focused input keeps its focus and value).
  */
 @Component({
   selector: "mm-checkout-wizard",
   standalone: true,
   template: "<div #host></div>",
 })
-export class CheckoutWizardComponent implements OnChanges, OnDestroy {
-  @Input({ required: true }) checkout!: Checkout;
-  @Input() logoUrl?: string;
-  @ViewChild("host", { static: true }) host!: ElementRef<HTMLElement>;
+export class CheckoutWizardComponent {
+  readonly checkout = input.required<Checkout>();
+  readonly logoUrl = input<string | undefined>(undefined);
+  readonly colorScheme = input<ColorScheme>("auto");
+  readonly variant = input<CheckoutVariant>("default");
+  private readonly host = viewChild.required<ElementRef<HTMLElement>>("host");
 
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
-  private unmount?: () => void;
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (!this.isBrowser || !this.checkout) {
-      return;
-    }
-    if (changes["checkout"] || changes["logoUrl"]) {
-      this.unmount?.();
-      this.unmount = mountCheckout(this.host.nativeElement, this.checkout, { logoUrl: this.logoUrl });
-    }
-  }
-
-  ngOnDestroy(): void {
-    this.unmount?.();
+  constructor() {
+    effect((onCleanup) => {
+      if (!this.isBrowser) {
+        return;
+      }
+      const unmount = mountCheckout(this.host().nativeElement, this.checkout(), {
+        logoUrl: this.logoUrl(),
+        variant: this.variant(),
+      });
+      onCleanup(unmount);
+    });
+    effect(() => {
+      if (this.isBrowser) {
+        this.checkout().setColorScheme(this.colorScheme());
+      }
+    });
   }
 }
