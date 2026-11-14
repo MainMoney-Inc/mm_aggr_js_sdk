@@ -1,6 +1,6 @@
 {
   "name": "@mainmoneyapp/js-http",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Merchant-backend HTTP client for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "MIT",
