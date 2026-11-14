@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.4
+## 0.1.5
+
+- v0.1.4 was tagged but never published (workspace dependency pins still named 0.1.3); this release carries its changes. Internal `@mainmoneyapp/js-*` pins are bumped together.
 
 - Security: `joinUrl` trims slashes in linear time (CodeQL `js/polynomial-redos`).
 - Security: dependency updates (vite, vitest 4, fast-uri, source-map-js, tinypool); the Angular wrapper and example build on Angular 21.
