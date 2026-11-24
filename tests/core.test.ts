@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -62,5 +64,13 @@ describe("joinUrl", () => {
 
   it("returns absolute URLs unchanged", () => {
     expect(joinUrl("https://shop.example", "https://other.example/x")).toBe("https://other.example/x");
+  });
+});
+
+describe("VERSION", () => {
+  it("matches the version in packages/core/package.json", async () => {
+    const { VERSION } = await import("@mainmoneyapp/js-core");
+    const pkg = JSON.parse(readFileSync("packages/core/package.json", "utf8")) as { version: string };
+    expect(VERSION).toBe(pkg.version);
   });
 });

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1
+
+- Docs: complete guides under `docs/` (architecture, session creation, merchant backend path contract with the PHP,
+  Python and Node SDK method for each route, deposit and payout flows, card and MainMoney tabs, payment links,
+  MainMoney Rails sellers, theming and i18n, snapshot/method/error reference, CORS and troubleshooting, security) and
+  framework guides for vanilla JS, React, Vue, Angular and Next.js/SSR. `README.md` keeps install and quick start and
+  links to them. The README quick start code block was missing its closing fence.
+- Fix (Angular): the `colorScheme` input no longer defaults to `"auto"`; unset, it keeps the scheme given to `createCheckout`.
+- Docs fixes: CSS colour variables are declared on the mount element, so they must be overridden there (or with a more
+  specific selector), not on an ancestor; `fee_bearer` does not change the deposit amount; the fee box never shows what
+  the merchant receives; backend checkout preferences colours win over `createSession({ theme })`.
+- Fix: `VERSION` exported by `@mainmoneyapp/js-core` said `0.1.3`; it now matches the package version (covered by a test).
+
 ## 0.2.0
 
 - Fix: the provider lookup (`match-provider`) is now one request per number. The debounce, blur and `pay()` share the

@@ -24,7 +24,8 @@ import { mountCheckout } from "@mainmoneyapp/js-checkout";
 export class CheckoutWizardComponent {
   readonly checkout = input.required<Checkout>();
   readonly logoUrl = input<string | undefined>(undefined);
-  readonly colorScheme = input<ColorScheme>("auto");
+  /** Leave unset to keep the scheme given to `createCheckout` (default `auto`). */
+  readonly colorScheme = input<ColorScheme | undefined>(undefined);
   readonly variant = input<CheckoutVariant>("default");
   /** `form` is the single-page checkout (default for deposits); `wizard` is the step-by-step flow. */
   readonly layout = input<MountOptions["layout"]>(undefined);
@@ -61,7 +62,7 @@ export class CheckoutWizardComponent {
     effect(() => {
       const scheme = this.colorScheme();
       const checkout = this.checkout();
-      if (this.isBrowser) {
+      if (this.isBrowser && scheme !== undefined) {
         this.zone.runOutsideAngular(() => checkout.setColorScheme(scheme));
       }
     });
