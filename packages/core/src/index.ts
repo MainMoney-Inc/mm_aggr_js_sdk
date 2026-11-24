@@ -36,4 +36,4 @@ export {
   type StatusPayload,
 } from "./types.js";
 
-export const VERSION = "0.1.3";
+export const VERSION = "0.2.1";

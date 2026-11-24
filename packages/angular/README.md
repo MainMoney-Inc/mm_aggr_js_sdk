@@ -56,4 +56,4 @@ export class PayComponent implements OnInit {
 - The widget runs outside the Angular zone, so its polling and debounce timers do not trigger change detection.
 - Create the `Checkout` once. Never build it in a template expression or getter.
 - On `ngOnDestroy` of the host page call `checkout.close()` to stop status polling.
-- The merchant backend must allow CORS for your origin, see the main README ("CORS").
+- The merchant backend must allow CORS for your origin, see [docs/troubleshooting.md](../../docs/troubleshooting.md) and [docs/frameworks/angular.md](../../docs/frameworks/angular.md).
