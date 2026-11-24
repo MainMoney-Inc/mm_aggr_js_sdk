@@ -278,7 +278,8 @@ function phoneField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   });
   input.addEventListener("blur", () => {
     clearTimeout(timer);
-    if (input.value.trim() !== "") {
+    // A re-render removes the focused input, which fires blur on a detached node: not a customer action.
+    if (input.isConnected && input.value.trim() !== "") {
       runLookup();
     }
   });

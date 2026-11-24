@@ -38,11 +38,22 @@ import { CheckoutWizardComponent } from "@mainmoneyapp/js-angular";
   imports: [CheckoutWizardComponent],
   template: `<mm-checkout-wizard [checkout]="checkout" />`,
 })
-export class PayComponent {
-  checkout = createCheckout(session, { operation: "deposit", pollUrl, pollHeaders });
+export class PayComponent implements OnInit {
+  checkout?: Checkout;
+
+  async ngOnInit(): Promise<void> {
+    const checkout = createCheckout(session, { operation: "deposit", pollUrl, pollHeaders });
+    await checkout.loadCountries();
+    this.checkout = checkout; // create once; a new instance restarts the widget
+  }
 }
 ```
 
 - The logo is embedded, so no `assets` entry is needed. Pass `[logoUrl]` to override it.
 - Changing `[checkout]` or `[logoUrl]` remounts the wizard.
 - Nothing is mounted on the server, so SSR is safe.
+- Inputs: `checkout` (required), `logoUrl`, `colorScheme`, `variant`, `layout` (`form` | `wizard`), `defaultCountry`, `links`.
+- The widget runs outside the Angular zone, so its polling and debounce timers do not trigger change detection.
+- Create the `Checkout` once. Never build it in a template expression or getter.
+- On `ngOnDestroy` of the host page call `checkout.close()` to stop status polling.
+- The merchant backend must allow CORS for your origin, see the main README ("CORS").

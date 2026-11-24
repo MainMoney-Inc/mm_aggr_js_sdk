@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- Fix: the provider lookup (`match-provider`) is now one request per number. The debounce, blur and `pay()` share the
+  request in flight, a slower answer for a number the customer already replaced is dropped, and a failing limits or
+  fees call no longer discards the match. A blur fired by the widget's own re-render no longer starts a lookup.
+- Fix (CORS): the browser no longer sends a custom `Idempotency-Key` header on deposits and payouts by default. It made
+  every payment fail the CORS preflight on backends that only allow `Content-Type` and `Authorization`. The
+  `reference` in the body already makes the call idempotent. Opt back in with `createCheckout({ idempotencyHeader: true })`
+  once your backend allows the header.
+- Angular: `CheckoutWizardComponent` runs the widget outside the Angular zone (status polling and the lookup debounce
+  no longer trigger a change-detection pass each), clears its DOM on destroy, and gains `layout`, `defaultCountry` and
+  `links` inputs.
+- Docs: CORS and troubleshooting guide, Angular guidance.
+
 ## 0.1.5
 
 - v0.1.4 was tagged but never published (workspace dependency pins still named 0.1.3); this release carries its changes. Internal `@mainmoneyapp/js-*` pins are bumped together.

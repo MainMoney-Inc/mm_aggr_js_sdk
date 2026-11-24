@@ -305,7 +305,9 @@ function identifierField(checkout: Checkout, state: CheckoutSnapshot, phone: boo
   input.value = state.identifier;
   input.addEventListener("input", () => checkout.setIdentifier(input.value));
   input.addEventListener("blur", () => {
-    run(() => checkout.matchProvider());
+    if (input.isConnected) {
+      run(() => checkout.matchProvider());
+    }
   });
   if (phone && state.selectedCountry?.phone_code) {
     const row = document.createElement("div");
