@@ -68,6 +68,13 @@ export type CreateCheckoutOptions = {
    * reference and Idempotency-Key suffix.
    */
   onRetry?: () => void | Promise<void>;
+  /**
+   * Also send the reference as an `Idempotency-Key` header on deposits and payouts. Off by default: a custom header
+   * makes the browser preflight list it in `Access-Control-Allow-Headers`, and a merchant backend that does not
+   * allow it fails every payment with a CORS error. The `reference` in the body already makes the call idempotent;
+   * turn this on only when your backend allows the header (or forwards it to the aggregator).
+   */
+  idempotencyHeader?: boolean;
   /** Polling interval; defaults to 1000 ms. */
   pollIntervalMs?: number;
   /** After this long without a terminal status the widget flags `slow` (default 30000 ms) but keeps polling. */
@@ -427,6 +434,8 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       state.highlightedProviderCode = undefined;
       state.customerName = null;
       lastMatchedIdentifier = "";
+      lookupSeq += 1;
+      lookup = undefined;
       state.providers = paginated<Provider>(payload);
       state.quoteUnavailable = false;
       if (!state.lockCurrency) {
@@ -496,36 +505,74 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
     notify();
   };
 
-  const matchProvider = async (): Promise<void> => {
-    const trimmed = state.identifier.trim();
-    if (trimmed === "") {
-      return;
-    }
-    if (trimmed === lastMatchedIdentifier) {
-      return;
-    }
+  /** Lookup in flight, keyed by country and number: the debounce, blur and `pay()` all ask for the same one. */
+  let lookup: { key: string; promise: Promise<void> } | undefined;
+  /** Bumped by every new lookup so a slower, older answer never overwrites a newer one. */
+  let lookupSeq = 0;
+
+  const runMatch = async (trimmed: string, key: string): Promise<void> => {
+    const seq = ++lookupSeq;
+    let payload: Record<string, unknown>;
     try {
-      const payload = await http.get<Record<string, unknown>>(session.paths.matchProvider, {
+      payload = await http.get<Record<string, unknown>>(session.paths.matchProvider, {
         account_number: e164OrIdentifier(),
         get_lookup: true,
         operation_type: routingOperationType(),
       });
-      const entity = typeof payload.entity === "string" ? payload.entity : undefined;
-      if (entity !== undefined) {
-        state.highlightedProviderCode = entity;
-        const matched = state.providers.find((item) => item.code === entity);
-        if (matched !== undefined) {
-          state.selectedProvider = matched;
-          applyProviderCurrency(matched);
-        }
-      }
-      state.customerName = extractCustomerName(payload);
-      lastMatchedIdentifier = trimmed;
-      await refreshLimitsAndFees();
-      notify();
     } catch (error) {
-      fail(error);
+      if (seq === lookupSeq) {
+        fail(error);
+      }
+      return;
     }
+    if (seq !== lookupSeq || key !== lookupKey()) {
+      // The customer kept typing or changed country while this was in flight.
+      return;
+    }
+    const entity = typeof payload.entity === "string" ? payload.entity : undefined;
+    if (entity !== undefined) {
+      state.highlightedProviderCode = entity;
+      const matched = state.providers.find((item) => item.code === entity);
+      if (matched !== undefined) {
+        state.selectedProvider = matched;
+        applyProviderCurrency(matched);
+      }
+    }
+    state.customerName = extractCustomerName(payload);
+    lastMatchedIdentifier = trimmed;
+    // The match stands even when limits or fees cannot be loaded: show it first, then report that separately.
+    notify();
+    try {
+      await refreshLimitsAndFees();
+    } catch (error) {
+      if (seq === lookupSeq) {
+        fail(error);
+        return;
+      }
+    }
+    if (seq === lookupSeq) {
+      notify();
+    }
+  };
+
+  const lookupKey = (): string => `${state.selectedCountry?.code ?? ""}:${e164OrIdentifier()}`;
+
+  const matchProvider = (): Promise<void> => {
+    const trimmed = state.identifier.trim();
+    if (trimmed === "" || trimmed === lastMatchedIdentifier) {
+      return Promise.resolve();
+    }
+    const key = lookupKey();
+    if (lookup !== undefined && lookup.key === key) {
+      return lookup.promise;
+    }
+    const promise = runMatch(trimmed, key).finally(() => {
+      if (lookup?.promise === promise) {
+        lookup = undefined;
+      }
+    });
+    lookup = { key, promise };
+    return promise;
   };
 
   const setCurrency = async (code: string): Promise<void> => {
@@ -739,9 +786,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
         if (fees !== "") {
           payload.fees = fees;
         }
-        created = await http.post<StatusPayload>(session.paths.deposits, payload, {
-          "Idempotency-Key": reference,
-        });
+        created = await http.post<StatusPayload>(session.paths.deposits, payload, idempotencyHeaders(reference));
       } else {
         created = await http.post<StatusPayload>(session.paths.payouts, {
           provider_code: state.selectedProvider.code,
@@ -749,7 +794,7 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
           amount: state.amount,
           currency: state.currency,
           destination_account: e164OrIdentifier(),
-        }, { "Idempotency-Key": reference });
+        }, idempotencyHeaders(reference));
       }
       state.status = created;
       if (typeof created.status === "string" && isTerminalStatus(created.status)) {
@@ -813,6 +858,9 @@ export function createCheckout(session: Session, options: CreateCheckoutOptions)
       fail(error);
     }
   };
+
+  const idempotencyHeaders = (reference: string): Record<string, string> =>
+    options.idempotencyHeader === true ? { "Idempotency-Key": reference } : {};
 
   const retry = async (): Promise<void> => {
     if (options.onRetry !== undefined) {

@@ -1,6 +1,6 @@
 {
   "name": "@mainmoneyapp/js-angular",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Angular checkout wizard for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "MIT",
@@ -32,7 +32,7 @@
     "@angular/core": ">=17.2"
   },
   "dependencies": {
-    "@mainmoneyapp/js-checkout": "0.1.5",
+    "@mainmoneyapp/js-checkout": "0.2.0",
     "tslib": "^2.8.1"
   },
   "devDependencies": {

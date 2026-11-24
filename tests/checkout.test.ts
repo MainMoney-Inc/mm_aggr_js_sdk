@@ -481,7 +481,7 @@ describe("cart currency, quote, retry and email", () => {
 
   it("retries in place with a new reference and idempotency key suffix", async () => {
     const mock = new MockFetch();
-    const checkout = await failedDeposit(mock);
+    const checkout = await failedDeposit(mock, { idempotencyHeader: true });
     expect(checkout.getState().step).toBe("overview");
     await checkout.retry();
     mock.enqueue(200, { status: "PENDING" });
@@ -655,3 +655,95 @@ describe("cart currency and session defaults", () => {
     expect(state.lockCurrency).toBe(false);
   });
 });
+
+describe("provider lookup", () => {
+  async function ready(mock: MockFetch, options: Record<string, unknown> = {}) {
+    mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [
+      { code: "MPESA_KE", name: "M-Pesa", entity_type: "MOBILE_MONEY", country_code: "KE", currency_code: "KES" },
+      { code: "AIRTEL_KE", name: "Airtel", entity_type: "MOBILE_MONEY", country_code: "KE", currency_code: "KES" },
+    ]);
+    const checkout = createCheckout(sessionWith(mock), { operation: "deposit", pollStatus: false, ...options });
+    await checkout.loadCountries();
+    await checkout.selectCountry("KE");
+    return checkout;
+  }
+
+  it("sends one lookup when the debounce, blur and pay ask for the same number", async () => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock);
+    mock.enqueue(200, { entity: "AIRTEL_KE", lookup_data: { name: "Jane" } });
+    checkout.setIdentifier("0712345678");
+    await Promise.all([checkout.matchProvider(), checkout.matchProvider(), checkout.matchProvider()]);
+    expect(mock.calls.filter((call) => call.url.includes("/match-provider"))).toHaveLength(1);
+    expect(checkout.getState().selectedProvider?.code).toBe("AIRTEL_KE");
+  });
+
+  it("drops a slow answer for a number the customer already replaced", async () => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock);
+    mock.enqueue(200, { entity: "MPESA_KE", lookup_data: { name: "Old Number" } });
+    mock.enqueue(200, { entity: "AIRTEL_KE", lookup_data: { name: "New Number" } });
+    checkout.setIdentifier("0712345678");
+    const first = checkout.matchProvider();
+    checkout.setIdentifier("0799999999");
+    const second = checkout.matchProvider();
+    await Promise.all([first, second]);
+    const state = checkout.getState();
+    expect(state.selectedProvider?.code).toBe("AIRTEL_KE");
+    expect(state.customerName).toBe("New Number");
+  });
+
+  it("keeps the match when limits and fees cannot be loaded", async () => {
+    const mock = new MockFetch();
+    const checkout = await ready(mock, { amount: "100", currency: "KES" });
+    mock.enqueue(200, { entity: "AIRTEL_KE", lookup_data: { name: "Jane" } });
+    mock.enqueue(500, { message: "limits down" });
+    checkout.setIdentifier("0712345678");
+    await checkout.matchProvider();
+    const state = checkout.getState();
+    expect(state.selectedProvider?.code).toBe("AIRTEL_KE");
+    expect(state.customerName).toBe("Jane");
+    expect(state.error).toBeDefined();
+  });
+});
+
+describe("deposit request headers", () => {
+  async function pending(mock: MockFetch, options: Record<string, unknown> = {}) {
+    mock.enqueue(200, [{ code: "KE", name: "Kenya", phone_code: "254" }]);
+    mock.enqueue(404, {});
+    mock.enqueue(200, [
+      { code: "MPESA_KE", name: "M-Pesa", entity_type: "MOBILE_MONEY", country_code: "KE", currency_code: "KES" },
+    ]);
+    mock.enqueue(200, { limits: [] });
+    mock.enqueue(200, { total_to_pay: "100.00" });
+    const checkout = createCheckout(sessionWith(mock), {
+      operation: "deposit",
+      pollStatus: false,
+      reference: "ORDER-1",
+      amount: "100",
+      currency: "KES",
+      ...options,
+    });
+    await checkout.loadCountries();
+    await checkout.selectCountry("KE");
+    checkout.setIdentifier("0712345678");
+    mock.enqueue(200, { status: "PENDING" });
+    await checkout.confirm();
+    return mock.calls.find((call) => call.method === "POST" && call.url.endsWith("/deposits"));
+  }
+
+  it("does not send a custom Idempotency-Key header by default (no CORS preflight surprise)", async () => {
+    const call = await pending(new MockFetch());
+    expect(call).toBeDefined();
+    expect(Object.keys(call?.headers ?? {}).map((name) => name.toLowerCase())).not.toContain("idempotency-key");
+    expect(JSON.parse(call?.body ?? "{}").reference).toBe("ORDER-1");
+  });
+
+  it("sends the Idempotency-Key header when idempotencyHeader is on", async () => {
+    const call = await pending(new MockFetch(), { idempotencyHeader: true });
+    expect(call?.headers["Idempotency-Key"]).toBe("ORDER-1");
+  });
+});
+

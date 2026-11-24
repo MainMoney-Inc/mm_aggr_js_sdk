@@ -1,6 +1,6 @@
 {
   "name": "@mainmoneyapp/js-vue",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Vue checkout wizard for the MainMoney JS/TS frontend SDK",
   "type": "module",
   "license": "MIT",
@@ -44,6 +44,6 @@
     "vue": "^3.0.0"
   },
   "dependencies": {
-    "@mainmoneyapp/js-checkout": "0.1.5"
+    "@mainmoneyapp/js-checkout": "0.2.0"
   }
 }

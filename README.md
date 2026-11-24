@@ -98,6 +98,35 @@ Phone numbers are always sent as `<dial code><national number>` (`987805910`, `0
 known. Only bank account or card identifiers of an already selected, non-phone provider are sent raw. Changing
 the country repeats the lookup for a number already typed.
 
+### CORS: what your backend must allow
+
+The widget calls `merchantBackendUrl` from the browser, so that backend must answer the CORS preflight
+(`OPTIONS`) for your site's origin. Allow exactly:
+
+| Header | Value |
+| --- | --- |
+| `Access-Control-Allow-Origin` | your site origin (e.g. `https://shop.example`), not `*` when you send `Authorization` |
+| `Access-Control-Allow-Methods` | `GET, POST, OPTIONS` |
+| `Access-Control-Allow-Headers` | `Content-Type, Authorization` (add `Idempotency-Key` only if you set `idempotencyHeader: true`) |
+
+Express: `app.use(cors({ origin: ["https://shop.example"], allowedHeaders: ["Content-Type", "Authorization"] }))`.
+FastAPI: `CORSMiddleware(allow_origins=[...], allow_methods=["*"], allow_headers=["Content-Type", "Authorization"])`.
+Laravel: `config/cors.php` -> `allowed_origins`, `allowed_headers`. Note that `*` in `Access-Control-Allow-Headers`
+does not cover `Authorization`; list it explicitly.
+
+A CORS error on `POST /deposits` while the lookups (`GET`) work almost always means the preflight rejects a request
+header or the origin of the page that mounts the widget (check `http://` vs `https://`, `localhost` vs `127.0.0.1`
+and the port).
+
+### Troubleshooting
+
+- **Provider match fires repeatedly or flickers**: update to 0.2.0. The lookup runs once the customer stops typing
+  (600 ms) or leaves the field, and identical requests are shared.
+- **Widget restarts from the first step in Angular/React/Vue**: you created a new `Checkout` on every render. Create
+  it once (`ngOnInit`, `useMemo`/`useRef`, a service) and pass the same instance.
+- **Pay button stays disabled**: it needs a selected country, provider, an amount above 0, a currency and a phone
+  number of 7 to 12 national digits.
+
 ### Currency
 
 `currency` is the **cart currency** and never changes: `createCheckout({ currency: "USD" })` keeps `USD` as the
