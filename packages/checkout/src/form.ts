@@ -3,6 +3,9 @@
 import type { CheckoutLocale, Country, PaymentMethod, Provider } from "@mainmoneyapp/js-core";
 
 import type { Checkout, CheckoutSnapshot } from "./checkout.js";
+import { currencyDropdown, flagEmoji, marketFlag } from "./currency-dropdown.js";
+
+export { flagEmoji };
 
 export type FooterLinkKey = "privacy" | "terms" | "security" | "help";
 
@@ -308,17 +311,13 @@ function amountField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
     badge.textContent = state.currency;
     row.append(badge);
   } else {
-    const select = document.createElement("select");
-    select.className = "mm-currency-suffix mm-select";
-    for (const code of state.availableCurrencies) {
-      const option = document.createElement("option");
-      option.value = code;
-      option.textContent = code;
-      option.selected = state.currency === code;
-      select.append(option);
-    }
-    select.addEventListener("change", () => {
-      void checkout.setCurrency(select.value).catch(() => undefined);
+    const select = currencyDropdown({
+      codes: state.availableCurrencies,
+      selected: state.currency,
+      label: checkout.t("currency"),
+      flagFor: (code) => marketFlag(code, state.selectedProvider, state.countries),
+      onSelect: (code) => void checkout.setCurrency(code).catch(() => undefined),
+      className: "mm-currency-suffix",
     });
     row.append(select);
   }
@@ -334,33 +333,37 @@ function payCurrencyOptions(state: CheckoutSnapshot): string[] {
 }
 
 function payCurrencyField(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
-  const select = document.createElement("select");
-  select.className = "mm-input mm-input-bare mm-select";
-  for (const code of payCurrencyOptions(state)) {
-    const option = document.createElement("option");
-    option.value = code;
-    option.textContent = code;
-    option.selected = state.payCurrency === code;
-    select.append(option);
-  }
-  select.addEventListener("change", () => {
-    void checkout.setCurrency(select.value).catch(() => undefined);
+  const dropdown = currencyDropdown({
+    codes: payCurrencyOptions(state),
+    selected: state.payCurrency,
+    label: checkout.t("payIn"),
+    flagFor: (code) => marketFlag(code, state.selectedProvider, state.countries),
+    onSelect: (code) => void checkout.setCurrency(code).catch(() => undefined),
   });
-  return floatingField(checkout.t("payIn"), select);
+  return floatingField(checkout.t("payIn"), dropdown, checkout.t("payInHint"));
 }
 
 function feeBox(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
   const box = document.createElement("div");
   box.className = "mm-fee-box";
   const q = quote(state);
-  // With a quote the whole simulation is already in the pay currency.
-  const currency = state.fees?.quote?.to_currency ?? state.currency;
+  const fx = state.fees?.quote;
+  const converting = isConverting(state);
+  // Currency the customer pays in; with a quote the whole simulation is already in it.
+  const payCurrency = fx?.to_currency ?? (converting ? state.payCurrency : state.currency);
+  if (state.amount.trim() !== "") {
+    box.append(feeRow(checkout.t("orderAmount"), formatMoney(state.amount, state, state.currency)));
+  }
+  if (converting) {
+    // The backend's converted amount in the provider's currency; never computed in the browser.
+    const target = fx?.to_currency ?? state.payCurrency;
+    box.append(feeRow(checkout.t("convertedAmount"), formatMoney(fx?.converted_amount ?? null, state, target)));
+  }
   // Never show what the merchant receives: that is not the customer's business.
-  box.append(feeRow(checkout.t("processingFee"), formatMoney(q.fee, state, currency)));
-  const total = feeRow(checkout.t("youPay"), formatMoney(q.pay, state, currency));
+  box.append(feeRow(checkout.t("processingFee"), formatMoney(q.fee, state, payCurrency)));
+  const total = feeRow(checkout.t("youPay"), formatMoney(q.pay, state, payCurrency));
   total.classList.add("mm-fee-total");
   box.append(total);
-  const fx = state.fees?.quote;
   if (fx !== undefined) {
     const note = document.createElement("p");
     note.className = "mm-hint";
@@ -436,7 +439,9 @@ function payButton(checkout: Checkout, state: CheckoutSnapshot): HTMLElement {
 function applyPayState(button: HTMLElement, checkout: Checkout, state: CheckoutSnapshot): void {
   const ready = state.canPay;
   (button as HTMLButtonElement).disabled = !ready;
-  const total = ready ? formatMoney(quote(state).pay, state, state.fees?.quote?.to_currency ?? state.currency) : "—";
+  const fx = state.fees?.quote;
+  const payCurrency = fx?.to_currency ?? (isConverting(state) ? state.payCurrency : state.currency);
+  const total = ready ? formatMoney(quote(state).pay, state, payCurrency) : "—";
   button.textContent = `${checkout.t("pay")} ${total}`;
 }
 
@@ -450,13 +455,19 @@ function refreshPayButton(checkout: Checkout, from: HTMLElement): void {
 
 type Quote = { receives: string | null; fee: string | null; pay: string | null };
 
+/** True when the customer pays in a currency other than the amount's (a conversion applies). */
+function isConverting(state: CheckoutSnapshot): boolean {
+  return state.fees?.quote !== undefined || (state.payCurrency !== "" && state.payCurrency !== state.currency);
+}
+
 function quote(state: CheckoutSnapshot): Quote {
   const amount = state.amount.trim() === "" ? null : state.amount;
   const fees = state.fees;
   return {
     receives: fees?.merchant_receives ?? amount,
     fee: fees?.processing_fee ?? null,
-    pay: fees?.total_to_pay ?? amount,
+    // Before the conversion is quoted, `amount` is in another currency: never show it as the pay total.
+    pay: fees?.total_to_pay ?? (isConverting(state) ? null : amount),
   };
 }
 
@@ -484,14 +495,6 @@ function flagNode(country: Country | undefined): Node {
     return img;
   }
   return document.createTextNode(flagEmoji(country?.code));
-}
-
-/** ISO 3166-1 alpha-2 code to a flag emoji; empty when the code is not two letters. */
-export function flagEmoji(code: string | undefined): string {
-  if (code === undefined || !/^[A-Za-z]{2}$/.test(code)) {
-    return "";
-  }
-  return [...code.toUpperCase()].map((char) => String.fromCodePoint(0x1f1e6 + char.charCodeAt(0) - 65)).join("");
 }
 
 function appendError(parent: HTMLElement, state: CheckoutSnapshot): void {

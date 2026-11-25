@@ -184,10 +184,19 @@ export function toE164Digits(input: string, dialCode: string): string {
 }
 
 export function providerAcceptedCurrencies(provider: Provider): string[] {
-  if (provider.accepted_currencies !== undefined && provider.accepted_currencies.length > 0) {
-    return [...provider.accepted_currencies];
+  const accepted = Array.isArray(provider.accepted_currencies) ? provider.accepted_currencies : [];
+  const codes = [
+    ...new Set(
+      accepted
+        .filter((code): code is string => typeof code === "string")
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => code !== ""),
+    ),
+  ];
+  if (codes.length > 0) {
+    return codes;
   }
-  return [provider.currency_code];
+  return typeof provider.currency_code === "string" && provider.currency_code !== "" ? [provider.currency_code.toUpperCase()] : [];
 }
 
 export function unionProviderCurrencies(providers: Provider[]): string[] {
