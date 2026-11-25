@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- Checkout: when a provider accepts several markets, the customer picks the currency from a designed dropdown (market
+  flag + ISO code) listing only that provider's currencies. The fee box shows the amount, the converted amount in the
+  provider's currency (from the backend quote, never computed in the browser) and the exchange rate; the pay total is
+  never shown in the wrong currency while a quote is pending. Provider currency lists are normalised (case, duplicates).
+
 ## 0.2.1
 
 - Docs: complete guides under `docs/` (architecture, session creation, merchant backend path contract with the PHP,
